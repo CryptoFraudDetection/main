@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "CryptoFraudDetection"
+version = "0.0.1"
+authors = [
+  { name="Gabriel Torres Gamez" },
+  { name="Can-Elian Barth" },
+  { name="Florian Baumgartner" },
+  { name="Aaron Brülisauer" },
+]
+description = "Package for the CryptoFraudDetection project"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "setuptools>=70.0.0",
+    "pytest>=7.3.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/CryptoFraudDetection/main"
+Issues = "https://github.com/CryptoFraudDetection/main/issues"
