@@ -1,0 +1,25 @@
+---
+title: "Scraping Testk"
+format:
+  typst:
+    margin:
+      x: 1cm
+      y: 1cm
+    papersize: a4
+    number-sections: true
+    toc: false
+    section-numbering: 1.1.a.
+    columns: 1
+    mainfont: "Helvetica"
+    fontsize: 11pt
+number-sections: true
+lang: en
+---
+
+Get the main first page results from Google search for the term "bitcoin".
+```{python}
+from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
+
+scraper = GoogleResultsScraper()
+print(scraper.get_main_results("bitcoin", headless=True))
+```
