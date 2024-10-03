@@ -1,0 +1,7 @@
+Get the main first page results from Google search for the term "bitcoin".
+```{python}
+from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
+
+scraper = GoogleResultsScraper()
+print(scraper.get_main_results("bitcoin", headless=True))
+```
