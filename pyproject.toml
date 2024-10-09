@@ -26,6 +26,7 @@ dependencies = [
     "selenium==4.25.0",
     "beautifulsoup4==4.12.3",
     "tqdm==4.66.2",
+    "elasticsearch==8.15.1",
 ]
 
 [project.urls]
