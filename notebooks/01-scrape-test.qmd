@@ -1,14 +1,31 @@
 Get the main first page results from Google search for the term "bitcoin".
 ```{python}
-import pandas as pd
+from CryptoFraudDetection.utils.enums import ScraperNotebookMode
 from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dataframe
+from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
+
+import pandas as pd
+from pprint import pprint
+
+MODE=ScraperNotebookMode.READ
 ```
 
 ```{python}
-scraper = GoogleResultsScraper()
-results = scraper.get_main_results("bitcoin", n_sites=20, headless=False)
+if MODE==ScraperNotebookMode.WRITE:
+    query = "bitcoin"
+    scraper = GoogleResultsScraper()
+    results = scraper.get_main_results(query, n_sites=1, headless=False)
+
+    results_df = pd.DataFrame(results)
+    results_df["query"] = query
+
+    insert_dataframe(index="google_search", df=results_df)
 ```
 
 ```{python}
-pd.DataFrame(results)
+if MODE==ScraperNotebookMode.READ:
+    results = search_data(index="google_search", q="query:bitcoin")
+    pprint(results.body)
+
 ```

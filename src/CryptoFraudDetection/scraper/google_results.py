@@ -2,7 +2,7 @@ import time
 from collections import defaultdict
 
 import CryptoFraudDetection.scraper.utils as utils
-from CryptoFraudDetection.exceptions import *
+from CryptoFraudDetection.utils.exceptions import *
 
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
@@ -46,7 +46,7 @@ class GoogleResultsScraper:
 
         time.sleep(1)
         results = defaultdict(list)
-        for i in tqdm(range(n_sites)):
+        for i in tqdm(range(n_sites), desc="Scraping Google", unit="site"):
             soup = BeautifulSoup(driver.page_source, "html.parser")
             boxes = soup.find_all("div", class_=BOX_CLASS)
 
