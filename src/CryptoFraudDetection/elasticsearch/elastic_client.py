@@ -9,6 +9,8 @@ import os
 import urllib3
 import warnings
 
+from CryptoFraudDetection.utils.exceptions import *
+
 from elasticsearch import Elasticsearch
 
 # Our Tailscale connection is secure, so we can ignore these warnings
@@ -22,9 +24,11 @@ ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY")
 
 
 def get_elasticsearch_client():
-    es = Elasticsearch(
+    if ELASTICSEARCH_API_KEY == "changeme":
+        raise APIKeyNotSetException()
+
+    return Elasticsearch(
         hosts=ELASTICSEARCH_HOSTNAME,
         api_key=ELASTICSEARCH_API_KEY,
         verify_certs=False,
     )
-    return es
