@@ -1,14 +1,3 @@
-import time
-from collections import defaultdict
-
-import CryptoFraudDetection.scraper.utils as utils
-from CryptoFraudDetection.utils.exceptions import *
-
-from selenium.webdriver.common.by import By
-from bs4 import BeautifulSoup
-from tqdm import tqdm
-
-
 """
 File: google_results.py
 
@@ -18,6 +7,18 @@ Description:
 Authors:
 - 
 """
+
+import time
+import contextlib
+from collections import defaultdict
+
+import CryptoFraudDetection.scraper.utils as utils
+from CryptoFraudDetection.utils.exceptions import *
+
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 BOX_CLASS = "MjjYud"
 DESC_CLASS = "VwiC3b"
@@ -54,7 +55,7 @@ class GoogleResultsScraper:
                 raise DetectedBotException("Google detected agent as bot.")
 
             for result in boxes:
-                try:
+                with contextlib.suppress(NoSuchElementException):
                     if result.find("div", class_=DESC_CLASS) is None:
                         continue
 
@@ -65,10 +66,6 @@ class GoogleResultsScraper:
                     results["link"].append(link)
                     results["title"].append(title)
                     results["description"].append(desc)
-
-                # Do nothing if there is an error
-                except:
-                    pass
 
             if i != n_sites - 1:
                 try:
