@@ -7,7 +7,9 @@ from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
 
 import pandas as pd
 from pprint import pprint
+```
 
+```{python}
 MODE=ScraperNotebookMode.READ
 ```
 
@@ -15,11 +17,13 @@ MODE=ScraperNotebookMode.READ
 if MODE==ScraperNotebookMode.WRITE:
     query = "bitcoin"
     scraper = GoogleResultsScraper()
-    results = scraper.get_main_results(query, n_sites=1, headless=False)
+    results = scraper.get_main_results(query, n_sites=20, headless=False)
+```
 
+```{python}
+if MODE==ScraperNotebookMode.WRITE:
     results_df = pd.DataFrame(results)
     results_df["query"] = query
-
     insert_dataframe(index="google_search", df=results_df)
 ```
 
@@ -27,5 +31,4 @@ if MODE==ScraperNotebookMode.WRITE:
 if MODE==ScraperNotebookMode.READ:
     results = search_data(index="google_search", q="query:bitcoin")
     pprint(results.body)
-
 ```

@@ -7,7 +7,6 @@ Description:
 
 from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
 
-from tqdm import tqdm
 from elasticsearch.helpers import bulk
 
 es = get_elasticsearch_client()
