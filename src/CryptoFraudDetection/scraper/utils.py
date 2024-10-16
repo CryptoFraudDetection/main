@@ -15,6 +15,4 @@ def get_driver(headless=False):
     options = webdriver.FirefoxOptions()
     if headless:
         options.add_argument("--headless")
-    options.add_argument("--no-sandbox")  # Evtl entfernen, ist nicht sicher
-    options.add_argument("--disable-dev-shm-usage")
     return webdriver.Firefox(options=options)

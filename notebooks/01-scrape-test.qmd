@@ -10,14 +10,19 @@ from pprint import pprint
 ```
 
 ```{python}
-MODE=ScraperNotebookMode.READ
+MODE=ScraperNotebookMode.WRITE
 ```
 
 ```{python}
 if MODE==ScraperNotebookMode.WRITE:
     query = "bitcoin"
     scraper = GoogleResultsScraper()
-    results = scraper.get_main_results(query, n_sites=20, headless=False)
+    results = scraper.get_main_results(query, n_sites=3, headless=False)
+```
+
+```{python}
+if MODE==ScraperNotebookMode.WRITE:
+    pprint(results)
 ```
 
 ```{python}
