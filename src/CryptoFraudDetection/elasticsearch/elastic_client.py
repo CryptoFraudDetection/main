@@ -6,12 +6,13 @@ Description:
 """
 
 import os
-import urllib3
 import warnings
 
-from CryptoFraudDetection.utils.exceptions import *
-
+import urllib3
 from elasticsearch import Elasticsearch
+
+from CryptoFraudDetection.utils.exceptions import APIKeyNotSetException
+
 
 # Our Tailscale connection is secure, so we can ignore these warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -23,7 +24,13 @@ ELASTICSEARCH_HOSTNAME = os.getenv("ELASTICSEARCH_HOSTNAME")
 ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY")
 
 
-def get_elasticsearch_client():
+def get_elasticsearch_client() -> Elasticsearch:
+    """
+    Get the Elasticsearch client.
+
+    Returns:
+    - Elasticsearch: Elasticsearch client.
+    """
     if ELASTICSEARCH_API_KEY == "changeme":
         raise APIKeyNotSetException()
 

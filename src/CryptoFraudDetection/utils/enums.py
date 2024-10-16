@@ -15,3 +15,15 @@ class ScraperNotebookMode(Enum):
 
     WRITE = "write"
     READ = "read"
+
+
+class LoggerMode(Enum):
+    """
+    Enum recreating for the logging package
+    """
+
+    DEBUG = 10
+    INFO = 20
+    WARNING = 30
+    ERROR = 40
+    FATAL = 50

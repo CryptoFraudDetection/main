@@ -10,15 +10,15 @@ import time
 from collections import defaultdict
 from typing import Dict, List
 
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+
 import CryptoFraudDetection.scraper.utils as utils
 from CryptoFraudDetection.utils.exceptions import (
     DetectedBotException,
     InvalidParameterException,
 )
-
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from tqdm import tqdm
+from CryptoFraudDetection.utils.logger import Logger
 
 
 class GoogleResultsScraper:
@@ -26,6 +26,7 @@ class GoogleResultsScraper:
     A scraper class that interacts with Google Search to extract search result links, titles, and descriptions using Selenium.
 
     Attributes:
+        logger (Logger): Logger instance used for logging.
         box_class (str): CSS class name for search result boxes.
         desc_class (str): CSS class name for search result descriptions.
         cookie_id (str): ID for Google's cookie acceptance button.
@@ -39,6 +40,7 @@ class GoogleResultsScraper:
 
     def __init__(
         self,
+        logger: Logger,
         box_class: str = "MjjYud",
         desc_class: str = "VwiC3b",
         cookie_id: str = "L2AGLb",
@@ -49,12 +51,14 @@ class GoogleResultsScraper:
         Initializes the GoogleResultsScraper class.
 
         Args:
+            logger (Logger): The logger instance to use for logging.
             box_class (str): CSS class name for the search result container. Defaults to "MjjYud".
             desc_class (str): CSS class name for the description. Defaults to "VwiC3b".
             cookie_id (str): ID for the cookie acceptance button. Defaults to "L2AGLb".
             search_box_id (str): ID for the search input box. Defaults to "APjFqb".
             next_button_id (str): ID for the next page button. Defaults to "pnnext".
         """
+        self.logger = logger
         self.box_class = box_class
         self.desc_class = desc_class
         self.cookie_id = cookie_id
@@ -87,17 +91,21 @@ class GoogleResultsScraper:
         """
         # Validate the number of sites to scrape
         if n_sites < 1:
-            raise InvalidParameterException("Number of sites must be at least 1")
+            self.logger.handle_exception(
+                InvalidParameterException, "Number of sites must be at least 1"
+            )
 
-        # Initialize the web driver
+        self.logger.info(f"Starting Google search for query: {query}")
+
         driver = utils.get_driver(headless=headless)
         driver.get("https://www.google.com")
 
         # Accept Google's cookies
         try:
             driver.find_element(By.ID, self.cookie_id).click()
+            self.logger.info("Accepted Google's cookies.")
         except NoSuchElementException:
-            print("Cookie acceptance button not found.")
+            self.logger.warning("Cookie acceptance button not found.")
 
         time.sleep(delay_between_pages)
 
@@ -106,28 +114,33 @@ class GoogleResultsScraper:
             search_box = driver.find_element(By.ID, self.search_box_id)
             search_box.send_keys(query)
             search_box.submit()
-        except NoSuchElementException as e:
-            raise NoSuchElementException(
-                "Could not find the search box element."
-            ) from e
+            self.logger.info("Search query submitted successfully.")
+        except NoSuchElementException:
+            self.logger.handle_exception(
+                NoSuchElementException,
+                "Could not find the search box element.",
+            )
 
         # Dictionary to store the scraped results
         results: Dict[str, List[str]] = defaultdict(list)
 
         # Loop through the specified number of Google search result pages
-        for i in tqdm(range(n_sites), desc="Scraping Google", unit="site"):
+        for i in range(n_sites):
             time.sleep(delay_between_pages)
 
             # Find all result boxes based on the box_class
             try:
                 result_boxes = driver.find_elements(By.CLASS_NAME, self.box_class)
-            except NoSuchElementException as e:
-                raise NoSuchElementException("Could not find any result boxes.") from e
+            except NoSuchElementException:
+                self.logger.handle_exception(
+                    NoSuchElementException, "Could not find any result boxes."
+                )
 
             # Check if Google has detected the scraper as a bot
             if len(result_boxes) == 0:
-                raise DetectedBotException(
-                    "No results found. Possibly blocked by Google."
+                self.logger.handle_exception(
+                    DetectedBotException,
+                    "No results found. Possibly blocked by Google.",
                 )
 
             # Extract link, title, and description from each result box
@@ -141,7 +154,7 @@ class GoogleResultsScraper:
                     results["title"].append(title)
                     results["description"].append(desc)
                 except NoSuchElementException:
-                    # Skip if some elements (like title or description) are missing
+                    self.logger.warning("Missing elements in result box.")
                     continue
 
             # Navigate to the next page of results
@@ -149,9 +162,13 @@ class GoogleResultsScraper:
                 try:
                     next_button = driver.find_element(By.ID, self.next_button_id)
                     next_button.click()
+                    self.logger.info(f"Navigating to page {i + 2} of results.")
                 except NoSuchElementException:
-                    print("Next page button not found.")
+                    self.logger.warning("Next page button not found.")
                     break
 
         driver.quit()
+        self.logger.info(
+            f"Scraped {len(results['link'])} results from Google using the query: {query}. Finished."
+        )
         return results
