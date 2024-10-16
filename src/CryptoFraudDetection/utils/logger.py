@@ -9,6 +9,7 @@ import logging
 import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from CryptoFraudDetection.utils.enums import LoggerMode
 
 
 class Logger:
@@ -26,14 +27,14 @@ class Logger:
     """
 
     def __init__(
-        self, name: str, level: int = logging.DEBUG, log_dir: str = "logs"
+        self, name: str, level: int = LoggerMode.DEBUG, log_dir: str = "logs"
     ) -> None:
         """
         Initializes the Logger instance with the specified name, log level, and log directory.
 
         Args:
             name (str): The name of the logger, typically the name of the module or class.
-            level (int, optional): The log level (default: logging.DEBUG).
+            level (int, optional): The log level (default: LoggerMode.DEBUG).
             log_dir (str, optional): The directory where log files will be saved (default: "logs").
         """
         self.logger: logging.Logger = logging.getLogger(name)
