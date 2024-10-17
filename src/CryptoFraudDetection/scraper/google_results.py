@@ -3,14 +3,14 @@ File: google_results.py
 
 Description:
 - This file contains the GoogleResultsScraper class, used to scrape search results from Google.
-  It leverages Selenium for browser automation and BeautifulSoup for parsing HTML content.
 """
 
 import time
 from collections import defaultdict
 from typing import Dict, List
-
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
 
 import CryptoFraudDetection.scraper.utils as utils
@@ -34,8 +34,15 @@ class GoogleResultsScraper:
         next_button_id (str): ID for Google's 'Next' button to go to the next page of results.
 
     Methods:
-        get_main_results(query: str, n_sites: int = 5, headless: bool = False) -> Dict[str, List[str]]:
-            Scrapes Google search results for a given query.
+        get_main_results: Scrapes Google search results for the given query.
+        _validate_input: Validates the number of search result pages to scrape.
+        _perform_search: Opens Google, accepts cookies, and submits the search query.
+        _accept_cookies: Accepts Google's cookies if the prompt appears.
+        _submit_search_query: Finds the search box, enters the query, and submits it.
+        _scrape_multiple_pages: Loops through multiple result pages and extracts search results.
+        _get_result_boxes: Fetches search result boxes from the current Google result page.
+        _extract_results: Extracts links, titles, and descriptions from result boxes.
+        _click_next_page: Clicks the 'Next' button to go to the next result page.
     """
 
     def __init__(
@@ -73,7 +80,7 @@ class GoogleResultsScraper:
         headless: bool = False,
     ) -> Dict[str, List[str]]:
         """
-        Scrapes Google search results for the given query using Selenium.
+        Function to scrape Google search results for the given query.
 
         Args:
             query (str): The search query to be performed on Google.
@@ -83,33 +90,71 @@ class GoogleResultsScraper:
 
         Returns:
             Dict[str, List[str]]: A dictionary containing the links, titles, and descriptions of the search results.
+        """
+        self._validate_input(n_sites)
+        driver = utils.get_driver(headless=headless)
+
+        try:
+            self._perform_search(driver, query, delay_between_pages)
+            results = self._scrape_multiple_pages(driver, n_sites, delay_between_pages)
+        finally:
+            driver.quit()
+
+        return results
+
+    def _validate_input(self, n_sites: int) -> None:
+        """
+        Validates the number of search result pages to scrape.
+
+        Args:
+            n_sites (int): The number of Google search result pages to scrape.
 
         Raises:
-            ValueError: If the number of sites is less than 1.
-            NoSuchElementException: If a required HTML element is not found.
-            Exception: If Google detects the scraper as a bot or if no results are found.
+            InvalidParameterException: If the number of sites is less than 1.
         """
-        # Validate the number of sites to scrape
         if n_sites < 1:
             self.logger.handle_exception(
                 InvalidParameterException, "Number of sites must be at least 1"
             )
 
-        self.logger.info(f"Starting Google search for query: {query}")
+    def _perform_search(self, driver: WebDriver, query: str, delay: float) -> None:
+        """
+        Opens Google, accepts cookies, and submits the search query.
 
-        driver = utils.get_driver(headless=headless)
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            query (str): The search query to be performed on Google.
+            delay (float): The delay between actions (in seconds).
+        """
         driver.get("https://www.google.com")
+        self._accept_cookies(driver)
+        time.sleep(delay)
+        self._submit_search_query(driver, query)
 
-        # Accept Google's cookies
+    def _accept_cookies(self, driver: WebDriver) -> None:
+        """
+        Accepts Google's cookies if the prompt appears.
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+        """
         try:
             driver.find_element(By.ID, self.cookie_id).click()
             self.logger.info("Accepted Google's cookies.")
         except NoSuchElementException:
             self.logger.warning("Cookie acceptance button not found.")
 
-        time.sleep(delay_between_pages)
+    def _submit_search_query(self, driver: WebDriver, query: str) -> None:
+        """
+        Finds the search box, enters the query, and submits it.
 
-        # Enter search query in the search box and submit
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            query (str): The search query to be submitted.
+
+        Raises:
+            NoSuchElementException: If the search box is not found on the page.
+        """
         try:
             search_box = driver.find_element(By.ID, self.search_box_id)
             search_box.send_keys(query)
@@ -117,58 +162,106 @@ class GoogleResultsScraper:
             self.logger.info("Search query submitted successfully.")
         except NoSuchElementException:
             self.logger.handle_exception(
-                NoSuchElementException,
-                "Could not find the search box element.",
+                NoSuchElementException, "Could not find the search box element."
             )
 
-        # Dictionary to store the scraped results
+    def _scrape_multiple_pages(
+        self,
+        driver: WebDriver,
+        n_sites: int,
+        delay: float,
+    ) -> Dict[str, List[str]]:
+        """
+        Loops through multiple result pages and extracts search results.
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+            n_sites (int): The number of Google search result pages to scrape.
+            delay (float): Delay (in seconds) between page navigations.
+
+        Returns:
+            Dict[str, List[str]]: A dictionary containing the links, titles, and descriptions of the search results.
+        """
         results: Dict[str, List[str]] = defaultdict(list)
 
-        # Loop through the specified number of Google search result pages
         for i in range(n_sites):
-            time.sleep(delay_between_pages)
-
-            # Find all result boxes based on the box_class
-            try:
-                result_boxes = driver.find_elements(By.CLASS_NAME, self.box_class)
-            except NoSuchElementException:
-                self.logger.handle_exception(
-                    NoSuchElementException, "Could not find any result boxes."
-                )
-
-            # Check if Google has detected the scraper as a bot
-            if len(result_boxes) == 0:
+            time.sleep(delay)
+            result_boxes = self._get_result_boxes(driver)
+            if not result_boxes:
                 self.logger.handle_exception(
                     DetectedBotException,
                     "No results found. Possibly blocked by Google.",
                 )
 
-            # Extract link, title, and description from each result box
-            for box in result_boxes:
-                try:
-                    link = box.find_element(By.TAG_NAME, "a").get_attribute("href")
-                    title = box.find_element(By.TAG_NAME, "h3").text
-                    desc = box.find_element(By.CLASS_NAME, self.desc_class).text
+            self._extract_results(result_boxes, results)
 
-                    results["link"].append(link)
-                    results["title"].append(title)
-                    results["description"].append(desc)
-                except NoSuchElementException:
-                    self.logger.warning("Missing elements in result box.")
-                    continue
+            if i != n_sites - 1 and not self._click_next_page(driver):
+                break
 
-            # Navigate to the next page of results
-            if i != n_sites - 1:
-                try:
-                    next_button = driver.find_element(By.ID, self.next_button_id)
-                    next_button.click()
-                    self.logger.info(f"Navigating to page {i + 2} of results.")
-                except NoSuchElementException:
-                    self.logger.warning("Next page button not found.")
-                    break
-
-        driver.quit()
-        self.logger.info(
-            f"Scraped {len(results['link'])} results from Google using the query: {query}. Finished."
-        )
         return results
+
+    def _get_result_boxes(self, driver: WebDriver) -> List[WebElement]:
+        """
+        Fetches search result boxes from the current Google result page.
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+
+        Returns:
+            List[WebElement]: A list of WebElement objects representing search result boxes.
+
+        Raises:
+            NoSuchElementException: If no result boxes are found on the page.
+        """
+        try:
+            return driver.find_elements(By.CLASS_NAME, self.box_class)
+        except NoSuchElementException:
+            self.logger.handle_exception(
+                NoSuchElementException, "Could not find any result boxes."
+            )
+            return []
+
+    def _extract_results(
+        self, result_boxes: List[WebElement], results: Dict[str, List[str]]
+    ) -> None:
+        """
+        Extracts links, titles, and descriptions from result boxes.
+
+        Args:
+            result_boxes (List[WebElement]): A list of WebElement objects representing search result boxes.
+            results (Dict[str, List[str]]): A dictionary to store extracted links, titles, and descriptions.
+        """
+        for box in result_boxes:
+            try:
+                link = box.find_element(By.TAG_NAME, "a").get_attribute("href")
+                title = box.find_element(By.TAG_NAME, "h3").text
+                desc = box.find_element(By.CLASS_NAME, self.desc_class).text
+
+                results["link"].append(link)
+                results["title"].append(title)
+                results["description"].append(desc)
+            except NoSuchElementException:
+                self.logger.info("Missing elements in result box. Skipping")
+                continue
+
+    def _click_next_page(self, driver: WebDriver) -> bool:
+        """
+        Clicks the 'Next' button to go to the next result page.
+
+        Args:
+            driver (WebDriver): The Selenium WebDriver instance.
+
+        Returns:
+            bool: True if the 'Next' button was clicked successfully, False if not.
+
+        Raises:
+            NoSuchElementException: If the next page button is not found on the page.
+        """
+        try:
+            next_button = driver.find_element(By.ID, self.next_button_id)
+            next_button.click()
+            self.logger.info("Navigated to the next page of results.")
+            return True
+        except NoSuchElementException:
+            self.logger.warning("Next page button not found.")
+            return False

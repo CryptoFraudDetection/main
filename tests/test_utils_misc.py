@@ -2,7 +2,6 @@
 This module contains the tests for the utils.misc module.
 """
 
-import pytest
 from CryptoFraudDetection.utils.misc import get_hello_world
 
 

@@ -2,7 +2,6 @@
 This module contains the tests for the scraper.google_results module.
 """
 
-import pytest
 import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
@@ -27,7 +26,7 @@ def test_get_main_results():
     Test the get_main_results method of the GoogleResultsScraper class
     """
     scraper = GoogleResultsScraper(logger=logger)
-    results = scraper.get_main_results("test", n_sites=1, headless=True)
+    results = scraper.get_main_results("test", n_sites=2, headless=True)
     assert len(results["link"]) >= 1
     assert len(results["title"]) >= 1
     assert len(results["description"]) >= 1
