@@ -13,7 +13,7 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
 
-import CryptoFraudDetection.scraper.utils as utils
+from CryptoFraudDetection.scraper import utils
 from CryptoFraudDetection.utils.exceptions import (
     DetectedBotException,
     InvalidParameterException,
