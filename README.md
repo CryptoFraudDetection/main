@@ -5,7 +5,9 @@ Main repository for the project.
 
 1. Clone the repo 📂
 2. Install the project using the `make dev-install` command 🛠️
-3. You're ready to start working ☕️
+3. Copy the `.env-example` file to `.env` and fill in the necessary environment variables 🔑
+4. Load the environment variables using the `source .env` command 🔄
+5. You're ready to start working ☕️
  
 ## Structure
 
