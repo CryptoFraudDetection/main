@@ -27,6 +27,9 @@ dependencies = [
     "beautifulsoup4==4.12.3",
     "tqdm==4.66.2",
     "elasticsearch==8.15.1",
+    "pandas==2.2.3",
+    "numpy==2.1.2",
+    "torch==2.5.0",
 ]
 
 [project.urls]
