@@ -39,4 +39,4 @@ def train_model(config=None):
             loss.backward()
             optimizer.step()
             time.sleep(1)  # Fake training time
-            wandb.log({"epoch": epoch, "loss": loss.item()})
+            wandb.log({"loss": loss.item()})
