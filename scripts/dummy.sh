@@ -3,8 +3,8 @@
 #SBATCH -t 0-01:00:00
 #SBATCH --gpus 1
 #SBATCH -J dummy_model
-#SBATCH -o dummy_out.log
-#SBATCH -e dummy_err.log
+#SBATCH -o logs/dummy_out.log
+#SBATCH -e logs/dummy_err.log
 
 # Check if sweep ID is provided as an argument
 if [ -z "$1" ]; then
