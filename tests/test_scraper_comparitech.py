@@ -11,7 +11,7 @@ logger = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
 
 def test_initialization():
     """
-    Test the initialization of the GoogleResultsScraper class
+    Test the initialization of the ComparitechScraper class
     """
     scraper = ComparitechScraper(logger=logger)
     assert scraper.base_url == "https://datawrapper.dwcdn.net/9nRA9/107/"
@@ -21,7 +21,7 @@ def test_initialization():
 
 def test_get_main_results():
     """
-    Test the get_main_results method of the GoogleResultsScraper class
+    Test the get_data method of the ComparitechScraper class
     """
     scraper = ComparitechScraper(logger=logger)
     results = scraper.get_data(test_run=True)
