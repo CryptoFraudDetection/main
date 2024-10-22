@@ -62,11 +62,16 @@ class ComparitechScraper:
         self.page_load_timeout = page_load_timeout
         self.element_wait_timeout = element_wait_timeout
 
-    def get_data(self, headless: bool = True) -> Dict[str, List[str]]:
+    def get_data(
+        self,
+        headless: bool = True,
+        test_run: bool = False,
+    ) -> Dict[str, List[str]]:
         """Execute the scraping process and return collected data.
 
         Args:
             headless: Whether to run browser in headless mode. Defaults to True.
+            test_run: Whether to limit scraping to a small number of pages. Defaults to False.
 
         Returns:
             Dictionary mapping column names to lists of values. Each key represents
@@ -85,7 +90,7 @@ class ComparitechScraper:
             driver.set_page_load_timeout(self.page_load_timeout)
 
             # Execute the main scraping process
-            return self._perform_scrape(driver)
+            return self._perform_scrape(driver, test_run)
 
         except WebDriverException as e:
             self.logger.handle_exception(
@@ -105,7 +110,11 @@ class ComparitechScraper:
                         "warning",
                     )
 
-    def _perform_scrape(self, driver: WebDriver) -> Dict[str, List[str]]:
+    def _perform_scrape(
+        self,
+        driver: WebDriver,
+        test_run: bool,
+    ) -> Dict[str, List[str]]:
         """Perform the main scraping operation.
 
         Navigates through all pages of the table, collecting data from each page
@@ -113,6 +122,7 @@ class ComparitechScraper:
 
         Args:
             driver: Selenium WebDriver instance to use for web interactions
+            test_run: Whether to limit scraping to a small number of pages
 
         Returns:
             Dictionary containing the scraped data, mapping column names to lists
@@ -142,9 +152,11 @@ class ComparitechScraper:
 
         # Initialize result storage and page counter
         results = defaultdict(list)
-        page_num = 1
+        page_num = 0
 
         while True:
+            page_num += 1
+
             self.logger.info(f"Scraping page {page_num}")
 
             # Extract data from current page
@@ -163,7 +175,9 @@ class ComparitechScraper:
             if not self._click_next_page(driver):
                 break
 
-            page_num += 1
+            # Break early if test run
+            if test_run and page_num == 3:
+                break
 
         self.logger.info(f"Completed scraping {page_num} pages")
         return dict(results)
