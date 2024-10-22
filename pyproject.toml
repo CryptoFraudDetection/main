@@ -30,6 +30,7 @@ dependencies = [
     "pandas==2.2.3",
     "numpy==2.1.2",
     "torch==2.5.0",
+    "wandb==0.18.5",
 ]
 
 [project.urls]
