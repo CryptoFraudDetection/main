@@ -29,10 +29,10 @@ jobs:
       run: |
         echo "Setting cookie environment variable from secret"
       env:
-        COOKIE_FILE_CONTENT: ${{ secrets.COOKIE_FILE_CONTENT_X }}
+        COOKIE_FILE_CONTENT_X: ${{ secrets.COOKIE_FILE_CONTENT_X }}
 
     - name: Test with pytest
       run: |
         pytest
       env:
-        COOKIE_FILE_CONTENT: ${{ secrets.COOKIE_FILE_CONTENTX}} 
+        COOKIE_FILE_CONTENT_X: ${{ secrets.COOKIE_FILE_CONTENT_X}} 
