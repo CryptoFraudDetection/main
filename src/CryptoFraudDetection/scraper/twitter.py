@@ -15,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 import CryptoFraudDetection.scraper.utils as utils
 
+import pandas as pd
 import time
 import re
 import json, os
@@ -82,7 +83,8 @@ class TwitterScraper:
             self.load_cookies(driver)
             self.navigate_to_explore(driver)
             self.perform_search(driver, search_query)
-            self.scrape_tweets(driver, tweet_count, search_query)
+            tweets_df = self.scrape_tweets(driver, tweet_count, search_query)
+            return tweets_df
 
         finally:
             driver.quit()
@@ -134,39 +136,36 @@ class TwitterScraper:
 
 
     def scrape_tweets(self, driver, tweet_count, search_query):
-        """Scrape the tweets from the page and save them to a CSV file."""
+        """Scrape the tweets from the page and return a DataFrame."""
         tweets_scraped = 0
-        sanitized_query = re.sub(r'[^\w\s]', '', search_query)  # Entfernt Sonderzeichen
-        sanitized_query = re.sub(r'\s+', '_', sanitized_query)  # Ersetzt Leerzeichen durch Unterstriche
-        file_name = f"../data/{sanitized_query}_tweets.csv"
+        tweet_data = []
 
-        with open(file_name, mode="w", newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Username", "Tweet", "Timestamp", "Likes", "Impressions"])
+        while tweets_scraped < tweet_count:
+            tweets = self.get_tweets(driver)
+            for tweet in tweets:
+                try:
+                    username, content, timestamp, likes, impressions = self.extract_tweet_details(tweet)
+                    tweet_data.append([username, content, timestamp, likes, impressions])
+                    tweets_scraped += 1
+                    print(f"Scraped tweet {tweets_scraped}/{tweet_count}: {username} - {content[:50]}")
 
-            while tweets_scraped < tweet_count:
-                tweets = self.get_tweets(driver)
-                for tweet in tweets:
-                    try:
-                        username, content, timestamp, likes, impressions = self.extract_tweet_details(tweet)
-                        writer.writerow([username, content, timestamp, likes, impressions])
-                        tweets_scraped += 1
-                        print(f"Scraped tweet {tweets_scraped}/{tweet_count}: {username} - {content[:50]}")
+                    if tweets_scraped >= tweet_count:
+                        break
 
-                        if tweets_scraped >= tweet_count:
-                            break
+                    sleep_time = random.uniform(2, 5)
+                    print(f"Sleeping for {sleep_time:.2f} seconds...")
+                    time.sleep(sleep_time)
 
-                        sleep_time = random.uniform(2, 5)
-                        print(f"Sleeping for {sleep_time:.2f} seconds...")
-                        time.sleep(sleep_time)
+                except Exception as e:
+                    print(f"Could not extract tweet details: {e}")
 
-                    except Exception as e:
-                        print(f"Could not extract tweet details: {e}")
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(3)
 
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(3)
-
-        print("Tweets saved to CSV.")
+        # Convert to DataFrame
+        df = pd.DataFrame(tweet_data, columns=["Username", "Tweet", "Timestamp", "Likes", "Impressions"])
+        print("Tweets scraped into DataFrame.")
+        return df
 
 
     def get_tweets(self, driver):
