@@ -67,6 +67,15 @@ class Logger:
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
 
+    def debug(self, message: str) -> None:
+        """
+        Logs a debug message.
+
+        Args:
+            message (str): The message to log.
+        """
+        self.logger.debug(message)
+
     def info(self, message: str) -> None:
         """
         Logs an informational message.
@@ -116,9 +125,8 @@ class Logger:
         """
         if logger_level == "error":
             self.logger.error(message)
+            raise exception_class(message)
         elif logger_level == "warning":
             self.logger.warning(message)
         elif logger_level == "info":
             self.logger.info(message)
-
-        raise exception_class(message)
