@@ -164,5 +164,8 @@ cython_debug/
 # DS_Store files
 .DS_Store
 
-# other
+# wandb
+wandb
+
+# cookies
 cookies_x_1_0.json

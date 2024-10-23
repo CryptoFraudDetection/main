@@ -24,6 +24,10 @@ dependencies = [
     "pytest==8.3.3",
     "black[jupyter]==24.8.0",
     "selenium==4.25.0",
+    "elasticsearch==8.15.1",
+    "pandas==2.2.3",
+    "torch==2.5.0",
+    "wandb==0.18.5",
 ]
 
 [project.urls]

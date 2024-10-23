@@ -12,15 +12,15 @@ help:
 	@echo "-----------------------"
 
 build:
-	python3 -m build
+	python3.12 -m build
 
 dev-install:
-	pip3 install -e .
+	pip3.12 install -e .
 
 install:
-	pip3 install .
+	pip3.12 install .
 
 test:
-	python3 -m pytest
+	python3.12 -m pytest
 
 .DEFAULT_GOAL := help

@@ -1,13 +1,16 @@
-from selenium import webdriver
-
 """
 Miscellaneous utility functions for the scraper module.
 """
 
+from selenium import webdriver
 
-def get_driver(headless=False):
+
+def get_driver(headless: bool = False) -> webdriver.Chrome:
     """
     Return a Selenium Chrome WebDriver object.
+
+    Args:
+        headless (bool): Whether to run the browser in headless mode.
 
     Returns:
         WebDriver: A Selenium WebDriver object.
@@ -15,8 +18,4 @@ def get_driver(headless=False):
     options = webdriver.FirefoxOptions()
     if headless:
         options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Firefox(options=options)
-
-    return driver
+    return webdriver.Firefox(options=options)
