@@ -25,6 +25,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         make install
+    - name: Set cookie environment variable
+      run: |
+        echo "Setting cookie environment variable from secret"
+      env:
+        COOKIE_FILE_CONTENT: ${{ secrets.COOKIE_FILE_CONTENT_X }}
+
     - name: Test with pytest
       run: |
         pytest
+      env:
+        COOKIE_FILE_CONTENT: ${{ secrets.COOKIE_FILE_CONTENTX}} 

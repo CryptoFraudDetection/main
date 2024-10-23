@@ -134,17 +134,38 @@ class TwitterScraper:
 
     def load_cookies(self, driver: webdriver.Firefox) -> None:
         """
-        Loads cookies from a file and refreshes the page.
+        Loads cookies from a file and refreshes the page. If the file is not found or an error occurs, 
+        cookies are loaded from an environment variable.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
         """
         driver.get("https://www.x.com")
-        with open('../data/cookies_x_1_0.json', 'r') as file:
-            cookies = json.load(file)
+        
+        cookie_file_path = '../data/cookies_x_1_0.json'
+        
+        try:
+            with open(cookie_file_path, 'r') as file:
+                cookies = json.load(file)
+            print(f"Cookies successfully loaded from {cookie_file_path}")
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            # Fallback: Cookies aus der Umgebungsvariable laden, wenn das Cookiefile fehlt oder ungültig ist
+            print(f"Error loading cookies from file: {e}. Trying to load from environment variable.")
+            cookie_file_content = os.getenv('COOKIE_FILE_CONTENT_X')
 
+            if cookie_file_content:
+                try:
+                    cookies = json.loads(cookie_file_content)
+                    print("Cookies successfully loaded from environment variable.")
+                except json.JSONDecodeError as e:
+                    raise ValueError("Invalid JSON format in COOKIE_FILE_CONTENT_X environment variable.") from e
+            else:
+                raise FileNotFoundError(f"Neither cookie file '{cookie_file_path}' nor 'COOKIE_FILE_CONTENT_X' environment variable could provide cookies.")
+
+        
         for cookie in cookies:
             driver.add_cookie(cookie)
+
         
         driver.refresh()
         time.sleep(10)
