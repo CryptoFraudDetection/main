@@ -35,6 +35,10 @@ df_test = x_scrapper.scrape_with_cookies()
 df_test['Tweet'].values
 ```
 
+```{python}
+df_test
+```
+
 #old / will be deleted if class works
 
 ```{python}
