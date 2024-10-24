@@ -1,19 +1,20 @@
----
-jupyter: python3
----
-
 ```{python}
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.options import Options
 import time
 import pandas as pd
 
-driver = webdriver.Firefox()
+firefox_options = Options()
+firefox_options.add_argument("--private")
+
+driver = webdriver.Firefox(options=firefox_options)
 
 url = "https://www.reddit.com/r/CryptoCurrency/search/?q=Terra+Luna"
 driver.get(url)
 
+time.sleep(100000000)
 time.sleep(3)
 
 post_data = []
@@ -47,256 +48,7 @@ df.shape
 print(df.head())
 ```
 
-```{python}
-#| ExecuteTime: {end_time: '2024-10-08T08:58:55.428740Z', start_time: '2024-10-08T08:58:36.104708Z'}
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-import time
-
-driver = webdriver.Firefox()
-
-# Funktion zum Suchen und Scrapen von Beiträgen
-def scrape_reddit(subreddit, query):
-    
-    url = f"https://www.reddit.com/r/{subreddit}/search/?q={query}&restrict_sr=1"
-    # Füge den Query in die URL ein
-    search_url = url.format(query=query)
-    
-    # Öffne die URL mit dem Webdriver
-    driver.get(search_url)
-    
-    # Warte kurz, damit die Seite vollständig geladen wird
-    time.sleep(3)
-
-    # Alle Beiträge auf der Seite finden
-    posts = driver.find_elements(By.CSS_SELECTOR, "div.Post")
-
-    # Liste für die gescrapten Daten
-    scraped_posts = []
-
-    # Durch jeden Beitrag gehen
-    for post in posts:
-        try:
-            title = post.find_element(By.CSS_SELECTOR, "h3").text
-            upvotes = post.find_element(By.CSS_SELECTOR, "div._1rZYMD_4xY3gRcSS3p8ODO").text
-            link = post.find_element(By.CSS_SELECTOR, "a.SQnoC3ObvgnGjWt90zD9Z").get_attribute('href')
-
-            # Daten sammeln
-            scraped_posts.append({
-                'title': title,
-                'upvotes': upvotes,
-                'link': link
-            })
-        except Exception as e:
-            print(f"Fehler beim Scrapen eines Posts: {e}")
-
-    return scraped_posts
-
-# Beispielabfrage
-subreddit = "CryptoCurrency"
-query = "Bitcoin"
-posts = scrape_reddit(subreddit,query)
-
-# Die gescrapten Beiträge ausgeben
-for post in posts:
-    print(f"Titel: {post['title']}, Upvotes: {post['upvotes']}, Link: {post['link']}")
-
-# Webdriver schließen
-driver.quit()
-```
 
 ```{python}
-#| ExecuteTime: {end_time: '2024-10-08T08:59:13.413143Z', start_time: '2024-10-08T08:59:13.399342Z'}
-posts
+df['URL']
 ```
-
-```{python}
-#| ExecuteTime: {end_time: '2024-10-08T09:02:48.002797Z', start_time: '2024-10-08T09:02:25.200060Z'}
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-import sys
-
-driver = webdriver.Firefox()
-
-# Funktion zum Suchen und Scrapen von Beiträgen
-def scrape_reddit(subreddit, query):
-    
-    url = f"https://www.reddit.com/r/{subreddit}/search/?q={query}&restrict_sr=1"
-    
-    # Öffne die URL mit dem Webdriver
-    driver.get(url)
-    
-    # Warte, bis die Seite geladen ist und das erste Post-Element vorhanden ist
-    try:
-        wait = WebDriverWait(driver, 10)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-testid='post-container']")))
-    except Exception as e:
-        print(f"Fehler beim Laden der Seite: {e}")
-        driver.quit()
-        sys.exit()
-    
-    # Schließe mögliche Consent-Banner
-    try:
-        consent_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]")
-        consent_button.click()
-    except:
-        pass  # Wenn kein Consent-Banner vorhanden ist
-    
-    # Alle Beiträge auf der Seite finden
-    posts = driver.find_elements(By.CSS_SELECTOR, "div[data-testid='post-container']")
-
-    # Liste für die gescrapten Daten
-    scraped_posts = []
-
-    # Durch jeden Beitrag gehen
-    for post in posts:
-        try:
-            title_element = post.find_element(By.CSS_SELECTOR, "h3")
-            title = title_element.text
-
-            upvote_element = post.find_element(By.CSS_SELECTOR, "div[data-click-id='upvote']")
-            upvotes = upvote_element.get_attribute('aria-label')
-
-            link_element = post.find_element(By.CSS_SELECTOR, "a[data-click-id='body']")
-            link = link_element.get_attribute('href')
-
-            # Daten sammeln
-            scraped_posts.append({
-                'title': title,
-                'upvotes': upvotes,
-                'link': link
-            })
-        except Exception as e:
-            print(f"Fehler beim Scrapen eines Posts: {e}")
-
-    return scraped_posts
-
-# Beispielabfrage
-subreddit = "CryptoCurrency"
-query = "Bitcoin"
-posts = scrape_reddit(subreddit, query)
-
-# Die gescrapten Beiträge ausgeben
-for post in posts:
-    print(f"Titel: {post['title']}, Upvotes: {post['upvotes']}, Link: {post['link']}")
-
-# Webdriver schließen
-driver.quit()
-```
-
-```{python}
-#| ExecuteTime: {end_time: '2024-10-08T09:28:39.808795Z', start_time: '2024-10-08T09:28:20.837343Z'}
-import time
-import json
-import os
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.service import Service
-
-class SeleniumScraper():
-    def __init__(self, driver=None, page=None):
-        self.driver = driver
-        self.page = page
-        self.links = []
-    
-    def setup_firefox_browser(self):
-        '''
-            Diese Funktion richtet einen Firefox-Webdriver für die Verwendung mit
-            Selenium ein. Sie erwartet einen Pfad zum geckodriver, verfügbar unter:
-            https://github.com/mozilla/geckodriver/releases
-        '''
-        
-        if os.name == 'posix':
-            geckodriver = '/geckodriver'
-        elif os.name == 'nt':
-            geckodriver = '/geckodriver.exe'
-        
-        options = Options()
-        options.headless = True  # Führt Firefox im Headless-Modus aus
-        
-        path = os.path.dirname(os.path.abspath(__file__))
-        geckodriver_path = path + geckodriver
-        
-        service = Service(executable_path=geckodriver_path)
-        self.driver = webdriver.Firefox(service=service, options=options)
-    
-    def collect_links(self,
-                      page,
-                      scroll_n_times):
-        '''
-            Diese Funktion öffnet eine Seite im Browser und scrollt n Mal
-            bis zum Seitenende. Danach findet sie alle Elemente entsprechend
-            dem XPath und extrahiert das href-Attribut.
-            
-            Parameter:
-                page : string
-                    Die URL, von der du Links sammeln möchtest.
-                
-                scroll_n_times : int
-                    Wie oft gescrollt werden soll, um mehr Inhalte zu laden.
-                
-            Rückgabe:
-                links : Liste
-                    Eine Liste der gesammelten URLs.
-        '''
-        if(scroll_n_times < 0):
-            raise ValueError('scroll_n_times muss größer oder gleich 0 sein')
-        
-        self.page = page.lower()
-        self.driver.get(page)
-        
-        xpath = "//a[@data-click-id='body']"
-        
-        sleep_time = 0.5
-        if(scroll_n_times != 0):
-            print(('Öffne Reddit und scrolle: dauert ungefähr {0} Sekunden'
-                   ).format(sleep_time * scroll_n_times))
-        else:
-            print('Öffne Reddit und scrolle... erledigt')
-        
-        try:
-            for _ in range(scroll_n_times):
-                self.driver.execute_script(
-                        "window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(sleep_time)
-            
-            elements = self.driver.find_elements(By.XPATH, xpath)
-            self.links = [tag.get_attribute('href') for tag in elements]
-            
-        finally:
-            self.driver.quit()
-        
-        print(('Gesammelte Links: {0}').format(len(self.links)))
-        
-        return self.links
-
-    def reddit_data_to_dict(self,
-                            script_data=[]):
-        '''
-            Nimmt id='data' als Eingabe und gibt ein Dict mit allen IDs
-            der eingegebenen Seite zurück.
-        '''
-        pure_dicts = []
-        print('Erstelle Python-Dicts aus Skriptdaten')
-        
-        for data in script_data:
-            first_index = data.index('{')
-            last_index = data.rfind('}') + 1
-            json_str = data[first_index:last_index]
-            pure_dicts.append(json.loads(json_str))
-        
-        return pure_dicts
-
-driver = webdriver.Firefox()
-scraper = SeleniumScraper(driver=driver)
-# scraper.setup_firefox_browser()
-page = 'https://www.reddit.com/r/CryptoCurrency/search/?q=bitcoin&type=link&cId=3328e5d8-9ad2-4683-b45b-d70b6d21c98d&iId=60bf7d89-838a-40d4-a001-d6dbeec2d8d3'
-links = scraper.collect_links(page=page, scroll_n_times=5)
-print(links)
-```
-
-
