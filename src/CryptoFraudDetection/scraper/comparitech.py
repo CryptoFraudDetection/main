@@ -83,6 +83,7 @@ class ComparitechScraper:
             TimeoutException: If the page fails to load within the specified timeout
         """
         driver = None
+        data: Dict[str, List[str]] = {}
         try:
             # Initialize the WebDriver with appropriate settings
             self.logger.info("Initializing web driver")
@@ -90,7 +91,7 @@ class ComparitechScraper:
             driver.set_page_load_timeout(self.page_load_timeout)
 
             # Execute the main scraping process
-            return self._perform_scrape(driver, test_run)
+            data = self._perform_scrape(driver, test_run)
 
         except WebDriverException as e:
             self.logger.handle_exception(
@@ -109,6 +110,8 @@ class ComparitechScraper:
                         f"Error closing WebDriver: {str(e)}",
                         "warning",
                     )
+
+        return data
 
     def _perform_scrape(
         self,
@@ -151,7 +154,7 @@ class ComparitechScraper:
             )
 
         # Initialize result storage and page counter
-        results = defaultdict(list)
+        results: Dict[str, List[str]] = defaultdict(list)
         page_num = 0
 
         while True:
@@ -199,7 +202,7 @@ class ComparitechScraper:
             TimeoutException: If table elements don't load within timeout
             StaleElementReferenceException: If elements become stale during processing
         """
-        results = defaultdict(list)
+        results: Dict[str, List[str]] = defaultdict(list)
 
         try:
             # Wait for table to become available in the DOM
