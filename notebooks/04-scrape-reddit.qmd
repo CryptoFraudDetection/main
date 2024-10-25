@@ -1,67 +1,92 @@
+---
+jupyter: python3
+---
+
 ```{python}
-import fake_useragent
 import pandas as pd
+import pickle
 import random
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
-# ua = fake_useragent.UserAgent()
-# random_ua = ua.random
-
-# profile = webdriver.FirefoxProfile()
-# profile.set_preference("browser.privatebrowsing.autostart", True)
-# firefox_options = Options()
-# firefox_options.set_preference("general.useragent.override", random_ua)
-
-# driver = webdriver.Firefox(options=firefox_options)
 driver = webdriver.Firefox()
 ```
 
 ```{python}
+cookies_file = "cookies.pkl"
+limit = 5
+url = f"https://old.reddit.com/r/CryptoCurrency/search?q=Terra+Luna&restrict_sr=on&sort=new&t=all&limit={limit}"
+```
 
-url = "https://www.reddit.com/r/CryptoCurrency/search/?q=Terra+Luna"
+Load cookies
+
+```{python}
+driver.get("about:blank")  # Open a blank page to set cookies
+
+try:
+    with open(cookies_file, "rb") as file:
+        cookies = pickle.load(file)
+        for cookie in cookies:
+            driver.add_cookie(cookie)
+    print("Cookies loaded successfully.")
+except FileNotFoundError:
+    print("No cookies file found. Proceeding without loading cookies.")
+```
+
+Acess the page
+
+```{python}
 driver.get(url)
 time.sleep(3)
 ```
 
+Wait for the page to load
+
 ```{python}
-def scroll_down():
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    random_wait = random.uniform(2, 7)
-    time.sleep(random_wait)
+try:
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.XPATH, '//header[@class="search-result-header"]'))
+    )
+    print("Search results are loaded.")
+except Exception as e:
+    print(f"Error waiting for search results to load: {e}")
+    driver.quit()
 ```
+
+Extract data
 
 ```{python}
 post_data = []
-scrolls = 1
-for _ in range(scrolls):
-    posts = driver.find_elements(By.XPATH, '//div[@data-testid="search-post-unit"]')
-    for post in posts:
-        link = post.find_element(By.XPATH, './/a[@data-testid="post-title-text"]')
-        title = link.text
-        href = link.get_attribute('href')
 
-        time_element = post.find_element(By.XPATH, './/faceplate-timeago//time')
-        date_ = time_element.get_attribute('datetime')
+try:
+    link_elements = driver.find_elements(By.XPATH, '//a[contains(@class, "search-title")]')
+    for link_element in link_elements:
+        href = link_element.get_attribute('href')
+        title = link_element.text
+        post_data.append({'Title': title, 'URL': href})
+except Exception as e:
+    print(f"Error extracting post URLs: {e}")
+```
 
-        post_data.append({'Title': title, 'URL': href, 'Date': date_})
+Store cookies
 
-    scroll_down()
+```{python}
+with open(cookies_file, "wb") as file:
+    pickle.dump(driver.get_cookies(), file)
+    print("Cookies saved successfully.")
+```
 
+```{python}
 driver.quit()
+```
 
+```{python}
 df = pd.DataFrame(post_data)
-df.shape
-```
 
-```{python}
+print(df.shape)
 print(df.head())
-```
-
-```{python}
-df['URL']
 ```
 
