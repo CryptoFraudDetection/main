@@ -17,14 +17,17 @@ driver = webdriver.Firefox()
 
 ```{python}
 cookies_file = "cookies.pkl"
+base_url = "https://old.reddit.com"
+subreddit = "r/CryptoCurrency"
+search_query = "Terra Luna"
 limit = 5
-url = f"https://old.reddit.com/r/CryptoCurrency/search?q=Terra+Luna&restrict_sr=on&sort=new&t=all&limit={limit}"
+url = f"{base_url}/{subreddit}/search?q={search_query}&restrict_sr=on&sort=new&t=all&limit={limit}"
 ```
 
 Load cookies
 
 ```{python}
-driver.get("https://old.reddit.com")  # Open a blank page to set cookies
+driver.get(base_url)  # Open a blank page to set cookies
 
 try:
     with open(cookies_file, "rb") as file:
@@ -54,6 +57,9 @@ try:
     )
 
     for result in search_results:
+
+        id = result.get_attribute("data-fullname")
+
         title_a = result.find_element(
             By.XPATH, './/a[contains(@class, "search-title")]'
         )
@@ -79,6 +85,7 @@ try:
 
         post_data.append(
             {
+                "id": id,
                 "title": title,
                 "url": url,
                 "date": date,
@@ -121,6 +128,6 @@ driver.quit()
 df = pd.DataFrame(post_data)
 
 print(df.shape)
-print(df.head())
+df.head()
 ```
 
