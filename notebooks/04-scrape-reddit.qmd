@@ -6,144 +6,27 @@ title: Scrape Reddit Posts
 
 
 ```{python}
-import bs4
-import pandas as pd
-import pickle
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-
-driver = webdriver.Firefox()
+import CryptoFraudDetection
 ```
 
 ```{python}
-cookies_file = "cookies.pkl"
 base_url = "https://old.reddit.com"
 subreddit = "r/CryptoCurrency"
 search_query = "Terra Luna"
-limit = 5
-url = f"{base_url}/{subreddit}/search?q={search_query}&restrict_sr=on&sort=new&t=all&limit={limit}"
-```
-
-## Search for Posts
-
-Load cookies
-
-```{python}
-driver.get(base_url)  # Open a blank page to set cookies
-
-try:
-    with open(cookies_file, "rb") as file:
-        cookies = pickle.load(file)
-        for cookie in cookies:
-            driver.add_cookie(cookie)
-    print("Cookies loaded successfully.")
-except FileNotFoundError:
-    print("No cookies file found. Proceeding without loading cookies.")
-```
-
-Acess the page
-
-```{python}
-driver.get(url)
-time.sleep(3)
-```
-
-Extract data
-
-```{python}
-post_data = []
-
-try:
-    search_results = driver.find_elements(
-        By.XPATH, '//div[contains(@class, "search-result-link")]'
-    )
-
-    for result in search_results:
-
-        id = result.get_attribute("data-fullname")
-
-        title_a = result.find_element(
-            By.XPATH, './/a[contains(@class, "search-title")]'
-        )
-        url = title_a.get_attribute("href")
-        title = title_a.text
-
-        score_span = result.find_element(
-            By.XPATH, './/span[contains(@class, "search-score")]'
-        )
-        score = score_span.text
-
-        comment_a = result.find_element(
-            By.XPATH, './/a[contains(@class, "search-comments")]'
-        )
-        comment = comment_a.text
-
-        date_time = result.find_element(By.XPATH, ".//time[@datetime]")
-        date = date_time.get_attribute("datetime")
-
-        author_a = result.find_element(By.XPATH, './/a[contains(@class, "author")]')
-        author = author_a.text
-        author_url = author_a.get_attribute("href")
-
-        post_data.append(
-            {
-                "id": id,
-                "title": title,
-                "url": url,
-                "date": date,
-                "author": author,
-                "author_url": author_url,
-                "score": score,
-                "comment": comment,
-            }
-        )
-except Exception as e:
-    print(f"Error extracting post data: {e}")
 ```
 
 ```{python}
-post_df = pd.DataFrame(post_data)
-
-print(post_df.shape)
-post_df.head()
-```
-
-## Load posts
-
-```{python}
-for post in post_data:
-    try:
-        driver.get(post["url"])
-        time.sleep(3)
-
-        try:
-            content_div = driver.find_element(
-                By.XPATH,
-                '//div[contains(@class, "entry")]//div[contains(@class, "md")]',
-            )
-            content = content_div.text
-        except Exception as e:
-            raise Exception(f"Error finding content div: {e}")
-
-        post["content"] = content
-
-    except Exception as e:
-        raise Exception(f"Error loading post URL: {e}")
+reddit_scraper = CryptoFraudDetection.scraper.reddit.RedditScraper(
+    base_url, subreddit, search_query
+)
 ```
 
 ```{python}
-post_data
+reddit_posts = reddit_scraper.scrape()
+reddit_posts_df = reddit_scraper.to_dataframe()
 ```
 
-Store cookies and quit
-
 ```{python}
-with open(cookies_file, "wb") as file:
-    pickle.dump(driver.get_cookies(), file)
-    print("Cookies saved successfully.")
-driver.quit()
+reddit_posts_df
 ```
 
