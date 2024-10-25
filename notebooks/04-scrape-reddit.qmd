@@ -1,6 +1,9 @@
 ---
 jupyter: python3
+title: Scrape Reddit Posts
 ---
+
+
 
 ```{python}
 import bs4
@@ -23,6 +26,8 @@ search_query = "Terra Luna"
 limit = 5
 url = f"{base_url}/{subreddit}/search?q={search_query}&restrict_sr=on&sort=new&t=all&limit={limit}"
 ```
+
+## Search for Posts
 
 Load cookies
 
@@ -99,35 +104,46 @@ except Exception as e:
     print(f"Error extracting post data: {e}")
 ```
 
-Show search results as HTML
-
 ```{python}
-for i, result in enumerate(search_results):
-    try:
-        raw_html = result.get_attribute("outerHTML")
-        soup = bs4.BeautifulSoup(raw_html, "html.parser")
-        formatted_html = soup.prettify()
-        print(f"Element {i+1}:\n{formatted_html}\n{'-'*80}")
-    except Exception as e:
-        print(f"Error retrieving raw HTML for element {i+1}: {e}")
+post_df = pd.DataFrame(post_data)
+
+print(post_df.shape)
+post_df.head()
 ```
 
-Store cookies
+## Load posts
+
+```{python}
+for post in post_data:
+    try:
+        driver.get(post["url"])
+        time.sleep(3)
+
+        try:
+            content_div = driver.find_element(
+                By.XPATH,
+                '//div[contains(@class, "entry")]//div[contains(@class, "md")]',
+            )
+            content = content_div.text
+        except Exception as e:
+            raise Exception(f"Error finding content div: {e}")
+
+        post["content"] = content
+
+    except Exception as e:
+        raise Exception(f"Error loading post URL: {e}")
+```
+
+```{python}
+post_data
+```
+
+Store cookies and quit
 
 ```{python}
 with open(cookies_file, "wb") as file:
     pickle.dump(driver.get_cookies(), file)
     print("Cookies saved successfully.")
-```
-
-```{python}
 driver.quit()
-```
-
-```{python}
-df = pd.DataFrame(post_data)
-
-print(df.shape)
-df.head()
 ```
 
