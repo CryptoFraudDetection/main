@@ -20,8 +20,6 @@ from selenium.common.exceptions import (
 )
 import CryptoFraudDetection.scraper.utils as utils
 from CryptoFraudDetection.utils.exceptions import (
-    DetectedBotException,
-    InvalidParameterException,
     AuthenticationError,
 )
 
@@ -366,12 +364,6 @@ class TwitterScraper:
                         f"Scraped tweet {tweets_scraped}/{tweet_count}: {username} - {content[:50]}"
                     )
 
-                    self.random_sleep(
-                        interval_1=(3, 8),
-                        probability_interval_1=0.9,
-                        probability_interval_2=0.07,
-                    )
-
                 except (NoSuchElementException, TimeoutException) as e:
                     self.logger.warning(
                         f"Could not find an element in tweet details: {e}"
@@ -379,6 +371,11 @@ class TwitterScraper:
                 except AttributeError as e:
                     self.logger.warning(
                         f"Attribute missing in tweet details extraction: {e}"
+                    )
+            self.random_sleep(
+                        interval_1=(3, 7),
+                        probability_interval_1=0.85,
+                        probability_interval_2=0.1,
                     )
 
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -423,7 +420,7 @@ class TwitterScraper:
 
     def extract_tweet_details(
         self, tweet: WebElement
-    ) -> Tuple[Optional[str], Optional[str], Optional[str], str, str]:
+    ) -> Tuple[str, str, str, str, str]:
         """
         Extracts details from a tweet such as username, content, timestamp, likes, and impressions.
 
@@ -431,25 +428,34 @@ class TwitterScraper:
             tweet (WebElement): The tweet element.
 
         Returns:
-            Tuple[Optional[str], Optional[str], Optional[str], str, str]: Extracted tweet details (username, content, timestamp, likes, impressions).
+            Tuple[str, str, str, str, str]: Extracted tweet details (username, content, timestamp, likes, impressions).
         """
+        # Setze Standardwerte für alle Details
+        username = "Unknown"
+        content = ""
+        timestamp = "N/A"
+        likes = "0"
+        impressions = "N/A"
+
         try:
             username = tweet.find_element(
                 By.XPATH, ".//span[contains(text(), '@')]"
             ).text
+        except NoSuchElementException:
+            self.logger.info("Username element not found; using default 'Unknown'.")
+
+        try:
             content = tweet.find_element(
                 By.XPATH, ".//div[@data-testid='tweetText']"
             ).text
+        except NoSuchElementException:
+            self.logger.info("Content element not found; using empty default.")
+
+        try:
             timestamp_element = tweet.find_element(By.XPATH, ".//time")
             timestamp = timestamp_element.get_attribute("datetime")
-        except NoSuchElementException as e:
-            self.logger.warning(f"Could not find one or more main tweet details: {e}")
-            return None, None, None, "0", "N/A"
-        except AttributeError as e:
-            self.logger.warning(
-                f"Attribute error encountered while extracting tweet details: {e}"
-            )
-            return None, None, None, "0", "N/A"
+        except NoSuchElementException:
+            self.logger.info("Timestamp element not found; using default 'N/A'.")
 
         # Extract likes
         try:
@@ -458,7 +464,6 @@ class TwitterScraper:
             ).get_attribute("innerHTML")
         except NoSuchElementException:
             self.logger.info("Likes element not found; defaulting to 0.")
-            likes = "0"
 
         # Extract impressions
         try:
@@ -471,6 +476,5 @@ class TwitterScraper:
                 ).get_attribute("innerHTML")
         except NoSuchElementException:
             self.logger.info("Impressions element not found; defaulting to N/A.")
-            impressions = "N/A"
 
         return username, content, timestamp, likes, impressions
