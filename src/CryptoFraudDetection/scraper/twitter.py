@@ -291,14 +291,11 @@ class TwitterScraper:
 
         except (NoSuchElementException, TimeoutException) as e:
             self.logger.warning(
-                "Close button not found or not clickable within the timeout period.", e
-            )
+                f"Close button not found or not clickable within the timeout period. {e}")
 
         except WebDriverException as e:
             self.logger.warning(
-                "WebDriverException encountered when trying to click the close button.",
-                e,
-            )
+                f"WebDriverException encountered when trying to click the close button. {e}")
 
     def perform_search(self, driver: webdriver.Firefox, search_query: str) -> None:
         """
@@ -412,9 +409,9 @@ class TwitterScraper:
                 )
             )
         except TimeoutException as e:
-            self.logger.warning("Timed out while waiting for tweet elements:", e)
+            self.logger.warning(f"Timed out while waiting for tweet elements: {e}")
         except NoSuchElementException as e:
-            self.logger.warning("No tweet elements found on the page:", e)
+            self.logger.warning(f"No tweet elements found on the page: {e}")
 
         return []
 
