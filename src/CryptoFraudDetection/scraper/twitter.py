@@ -12,7 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common.exceptions import JavaScriptException, NoSuchElementException, TimeoutException, ElementNotInteractableException
+from selenium.common.exceptions import WebDriverException, NoSuchElementException, TimeoutException, ElementNotInteractableException
 import CryptoFraudDetection.scraper.utils as utils
 from CryptoFraudDetection.utils.exceptions import (
     DetectedBotException,
@@ -73,12 +73,14 @@ class TwitterScraper:
         try:
             driver.get("https://www.x.com")
             wait = WebDriverWait(driver, 10)
-            self.random_sleep(interval_1=(6,11), probability_interval_1=1, probability_interval_2=0.0)
+            self.random_sleep(interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0)
             login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='/login']")))
+            
             try:
                 driver.execute_script("arguments[0].click();", login_button)
-            except JavaScriptException as e:
-                self.logger.warning(f"JavaScriptException encountered: {e}")
+            except WebDriverException as e:
+                self.logger.warning(f"WebDriverException encountered: {e}")
+                
         except NoSuchElementException as e:
             self.logger.warning(f"NoSuchElementException encountered: {e}")
 
@@ -244,7 +246,7 @@ class TwitterScraper:
             driver (webdriver.Firefox): Selenium WebDriver instance.
         """
         driver.get("https://www.x.com/explore")
-        self.random_sleep(interval_1=(6,11), probability_interval_1=1, probability_interval_2=0.0)
+        self.random_sleep(interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0)
         self.logger.info(f"Page title after loading cookies and navigating to Explore: {driver.title}")
 
         try:
@@ -254,10 +256,12 @@ class TwitterScraper:
             )
             driver.execute_script("arguments[0].click();", close_button)
             self.logger.info("Close button clicked successfully.")
+            
         except (NoSuchElementException, TimeoutException) as e:
             self.logger.warning("Close button not found or not clickable within the timeout period.", e)
-        except JavaScriptException as e:
-            self.logger.warning("JavaScriptException encountered when trying to click the close button.", e)
+            
+        except WebDriverException as e:
+            self.logger.warning("WebDriverException encountered when trying to click the close button.", e)
 
 
     def perform_search(self, driver: webdriver.Firefox, search_query: str) -> None:
