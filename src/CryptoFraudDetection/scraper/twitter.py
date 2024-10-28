@@ -132,7 +132,7 @@ class TwitterScraper:
         print("Cookies saved.")
 
 
-    def random_sleep(
+    def random_sleep(self,
         interval_1=(3, 8), 
         interval_2=(13, 20), 
         interval_3=(25, 35),
@@ -180,7 +180,7 @@ class TwitterScraper:
             self.load_cookies(driver)
             self.navigate_to_explore(driver)
             self.perform_search(driver, search_query)
-            return self.scrape_tweets(driver, tweet_count, search_query)
+            return self.scrape_tweets(driver, tweet_count)
             
         finally:
             driver.quit()
