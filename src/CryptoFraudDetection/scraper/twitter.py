@@ -291,11 +291,13 @@ class TwitterScraper:
 
         except (NoSuchElementException, TimeoutException) as e:
             self.logger.warning(
-                f"Close button not found or not clickable within the timeout period. {e}")
+                f"Close button not found or not clickable within the timeout period. {e}"
+            )
 
         except WebDriverException as e:
             self.logger.warning(
-                f"WebDriverException encountered when trying to click the close button. {e}")
+                f"WebDriverException encountered when trying to click the close button. {e}"
+            )
 
     def perform_search(self, driver: webdriver.Firefox, search_query: str) -> None:
         """
@@ -370,10 +372,10 @@ class TwitterScraper:
                         f"Attribute missing in tweet details extraction: {e}"
                     )
             self.random_sleep(
-                        interval_1=(3, 7),
-                        probability_interval_1=0.85,
-                        probability_interval_2=0.1,
-                    )
+                interval_1=(3, 7),
+                probability_interval_1=0.85,
+                probability_interval_2=0.1,
+            )
 
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             self.random_sleep(
