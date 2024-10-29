@@ -9,19 +9,24 @@ import os
 import warnings
 
 import urllib3
+from dotenv import load_dotenv, find_dotenv
 from elasticsearch import Elasticsearch
 
 from CryptoFraudDetection.utils.exceptions import APIKeyNotSetException
 
+# Load environment variables
+dotenv_path = find_dotenv()
+if dotenv_path:
+    load_dotenv(dotenv_path)
+
+ELASTICSEARCH_HOSTNAME = os.getenv("ELASTICSEARCH_HOSTNAME")
+ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY")
 
 # Our Tailscale connection is secure, so we can ignore these warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings(
     "ignore", message=".*using TLS with verify_certs=False is insecure"
 )
-
-ELASTICSEARCH_HOSTNAME = os.getenv("ELASTICSEARCH_HOSTNAME")
-ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY")
 
 
 def get_elasticsearch_client() -> Elasticsearch:
@@ -31,7 +36,7 @@ def get_elasticsearch_client() -> Elasticsearch:
     Returns:
     - Elasticsearch: Elasticsearch client.
     """
-    if ELASTICSEARCH_API_KEY == "changeme":
+    if ELASTICSEARCH_API_KEY in ("changeme", None):
         raise APIKeyNotSetException()
 
     return Elasticsearch(

@@ -5,7 +5,7 @@ Miscellaneous utility functions for the scraper module.
 from selenium import webdriver
 
 
-def get_driver(headless: bool = False) -> webdriver.Chrome:
+def get_driver(headless: bool = False) -> webdriver.Firefox:
     """
     Return a Selenium Chrome WebDriver object.
 
