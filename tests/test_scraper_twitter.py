@@ -2,12 +2,11 @@
 This module contains the tests for the scraper.twitter module.
 """
 
-import os
 import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.scraper.twitter import TwitterScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
 
-logger = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
+logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
 
 
 def test_initialization():
