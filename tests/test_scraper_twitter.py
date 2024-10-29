@@ -17,13 +17,15 @@ def test_initialization():
     username = "test_user"
     password = "test_pass"
     scraper_with_credentials = TwitterScraper(
-        username=username, password=password, logger=logger
+        username=username,
+        password=password,
+        logger=logger_,
     )
     assert scraper_with_credentials.username == username
     assert scraper_with_credentials.password == password
 
     # Test without credentials
-    scraper_without_credentials = TwitterScraper(logger=logger)
+    scraper_without_credentials = TwitterScraper(logger=logger_)
     assert scraper_without_credentials.username is None
     assert scraper_without_credentials.password is None
 
@@ -32,7 +34,11 @@ def test_scrape_with_cookies():
     """
     Test the scrape_with_cookies method of the TwitterScraper class
     """
-    scraper = TwitterScraper(username="test_user", password="test_pass", logger=logger)
+    scraper = TwitterScraper(
+        username="test_user",
+        password="test_pass",
+        logger=logger_,
+    )
     tweets_data = scraper.scrape_with_cookies(
         tweet_count=1, search_query="Bitcoin", headless=True
     )
