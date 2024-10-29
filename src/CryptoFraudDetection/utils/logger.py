@@ -7,6 +7,7 @@ Description:
 
 import logging
 import os
+from typing import Type
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from CryptoFraudDetection.utils.enums import LoggerMode
@@ -27,7 +28,7 @@ class Logger:
     """
 
     def __init__(
-        self, name: str, level: int = LoggerMode.DEBUG, log_dir: str = "logs"
+        self, name: str, level: LoggerMode = LoggerMode.DEBUG, log_dir: str = "logs"
     ) -> None:
         """
         Initializes the Logger instance with the specified name, log level, and log directory.
@@ -38,10 +39,7 @@ class Logger:
             log_dir (str, optional): The directory where log files will be saved (default: "logs").
         """
         self.logger: logging.Logger = logging.getLogger(name)
-
-        if not isinstance(level, int):
-            level = level.value
-        self.logger.setLevel(level)
+        self.logger.setLevel(level.value)
 
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -66,6 +64,15 @@ class Logger:
             )
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
+
+    def debug(self, message: str) -> None:
+        """
+        Logs a debug message.
+
+        Args:
+            message (str): The message to log.
+        """
+        self.logger.debug(message)
 
     def info(self, message: str) -> None:
         """
@@ -104,7 +111,10 @@ class Logger:
         self.logger.critical(message)
 
     def handle_exception(
-        self, exception_class: Exception, message: str, logger_level: str = "error"
+        self,
+        exception_class: Type[Exception],
+        message: str,
+        logger_level: str = "error",
     ) -> None:
         """
         Handles exception logging and raising.
@@ -112,13 +122,13 @@ class Logger:
         Args:
             exception_class (Exception): The class of the exception to raise.
             message (str): The error message to log and raise.
-            logger_level (str): The logging level to use ("error", "warning", "info"). Defaults to "error".
+            logger_level (str): The logging level to use ("error", "warning", "info").
+                Defaults to "error".
         """
         if logger_level == "error":
             self.logger.error(message)
+            raise exception_class(message)
         elif logger_level == "warning":
             self.logger.warning(message)
         elif logger_level == "info":
             self.logger.info(message)
-
-        raise exception_class(message)
