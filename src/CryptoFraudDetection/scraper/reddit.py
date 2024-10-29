@@ -65,8 +65,8 @@ class RedditScraper:
 
     def search_posts(self) -> None:
         """Search for posts in a specific subreddit."""
-        url = f"{self._base_url}/{self._subreddit}/search?q={self._search_query}&restrict_sr=on&sort=new&t=all&limit={self._limit}"
-        self.driver.get(url)
+        url = f"{self._base_url}/{self._subreddit}/search?q={self._search_query}&restrict_sr=on&sort=new&t=all&limit={self._limit}&after=id___"
+        self.driver.get(url)   # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
         
         # Wait for search results to load
         search_results_loaded = self._wait_for_element(
@@ -82,15 +82,19 @@ class RedditScraper:
         )
         
         # Process each post
+        # TODO: explain more and why?
         for result in search_results:
             post = self._extract_post_data(result)
             self.post_data.append(post)
 
     def _extract_post_data(self, result):
+        # TODO result bad name
         """Extract individual post data."""
         try:
+            # TODO: as loop
             post = {
                 "id": result.get_attribute("data-fullname"),
+                # TODO: looking for same object two times
                 "title": result.find_element(By.XPATH, './/a[contains(@class, "search-title")]').text,
                 "url": result.find_element(By.XPATH, './/a[contains(@class, "search-title")]').get_attribute("href"),
                 "score": result.find_element(By.XPATH, './/span[contains(@class, "search-score")]').text,

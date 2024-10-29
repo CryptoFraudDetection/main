@@ -17,7 +17,7 @@ search_query = "Terra Luna"
 
 ```{python}
 reddit_scraper = CryptoFraudDetection.scraper.reddit.RedditScraper(
-    base_url, subreddit, search_query
+    base_url, subreddit, search_query, 100
 )
 ```
 
@@ -28,5 +28,9 @@ reddit_posts_df = reddit_scraper.to_dataframe()
 
 ```{python}
 reddit_posts_df
+```
+
+```{python}
+reddit_posts_df.shape
 ```
 
