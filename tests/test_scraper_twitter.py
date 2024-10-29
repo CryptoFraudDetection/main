@@ -16,18 +16,22 @@ def test_initialization():
     # Test with credentials
     username = "test_user"
     password = "test_pass"
+    cookies_file_path = "test_cookies.json"
     scraper_with_credentials = TwitterScraper(
+        logger=logger_,
         username=username,
         password=password,
-        logger=logger_,
+        cookies_file_path=cookies_file_path,
     )
     assert scraper_with_credentials.username == username
     assert scraper_with_credentials.password == password
+    assert scraper_with_credentials.cookies_file_path == cookies_file_path
 
     # Test without credentials
     scraper_without_credentials = TwitterScraper(logger=logger_)
-    assert scraper_without_credentials.username is None
-    assert scraper_without_credentials.password is None
+    assert scraper_without_credentials.username == ""
+    assert scraper_without_credentials.password == ""
+    assert scraper_without_credentials.cookies_file_path == "data/cookies_x_1_0.json"
 
 
 def test_scrape_with_cookies():

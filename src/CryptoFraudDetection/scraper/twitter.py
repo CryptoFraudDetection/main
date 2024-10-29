@@ -41,6 +41,7 @@ class TwitterScraper:
         password (str): The Twitter password.
         logger (Logger): Logger for logging messages.
         cookies_loaded (bool): Whether cookies have been loaded for the current session.
+        cookies_file_path (str): Path to the file containing cookies.
     """
 
     def __init__(
@@ -48,6 +49,7 @@ class TwitterScraper:
         logger: Logger,
         username: str = "",
         password: str = "",
+        cookies_file_path: str = "data/cookies_x_1_0.json",
     ) -> None:
         """
         Initializes the TwitterScraper class with optional login credentials and a logger.
@@ -61,6 +63,7 @@ class TwitterScraper:
         self.password = password
         self.logger = logger
         self.cookies_loaded = False
+        self.cookies_file_path = cookies_file_path
 
     def login_save_cookies(
         self,
@@ -163,7 +166,7 @@ class TwitterScraper:
             driver (webdriver.Firefox): Selenium WebDriver instance.
         """
         cookies = driver.get_cookies()
-        with open("../data/cookies_x_1_0.json", "w", encoding="utf-8") as file:
+        with open("data/cookies_x_1_0.json", "w", encoding="utf-8") as file:
             json.dump(cookies, file)
         self.logger.info("Cookies saved.")
 
@@ -239,19 +242,18 @@ class TwitterScraper:
             driver (webdriver.Firefox): Selenium WebDriver instance.
         """
         driver.get("https://www.x.com")
-        cookie_file_path = "../data/cookies_x_1_0.json"
 
         # Check if the cookie file exists
-        if os.path.exists(cookie_file_path):
-            with open(cookie_file_path, "r", encoding="utf-8") as file:
+        if os.path.exists(self.cookies_file_path):
+            with open(self.cookies_file_path, "r", encoding="utf-8") as file:
                 try:
                     cookies = json.load(file)
                     self.logger.info(
-                        f"Cookies successfully loaded from {cookie_file_path}"
+                        f"Cookies successfully loaded from {self.cookies_file_path}"
                     )
                 except json.JSONDecodeError:
                     self.logger.handle_exception(
-                        ValueError, f"Invalid JSON format in {cookie_file_path}."
+                        ValueError, f"Invalid JSON format in {self.cookies_file_path}."
                     )
                     return
         elif cookie_file_content := os.getenv("COOKIE_FILE_CONTENT_X"):
@@ -269,7 +271,7 @@ class TwitterScraper:
         else:
             self.logger.handle_exception(
                 FileNotFoundError,
-                f"Neither cookie file '{cookie_file_path}' nor 'COOKIE_FILE_CONTENT_X' environment variable could provide cookies.",
+                f"Neither cookie file '{self.cookies_file_path}' nor 'COOKIE_FILE_CONTENT_X' environment variable could provide cookies.",
             )
             return
 
