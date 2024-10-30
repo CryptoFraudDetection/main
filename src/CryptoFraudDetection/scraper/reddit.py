@@ -13,7 +13,7 @@ import pandas as pd
 import pickle
 import random
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RedditScraper:
-    def __init__(self, base_url:str, subreddit:str, search_query:str, limit:int=5, wait_range:tuple[int,int] = (2,5), cookies_file:str="cookies.pkl"):
+    def __init__(self, base_url:str, subreddit:str, search_query:str, limit:int=5, wait_range:tuple[int,int] = (2,5), cookies_file:str="cookies/reddit-cookies.pkl"):
         self._base_url:str = base_url
         self._subreddit:str = subreddit
         self._search_query:str = search_query
