@@ -137,19 +137,25 @@ class RedditScraper:
             "/div"
             '/div[contains(@class, "comment")]'
         )
-        comment_text_xpath = (
+        text_xpath = (
             './div[contains(@class, "entry")]'
             '/form[contains(@class, "usertext")]'
             '/div[contains(@class, "usertext-body")]'
             '/div[contains(@class, "md")]'
         )
+        author_xpath = (
+            './div[contains(@class, "entry")]'
+            '/p[contains(@class, "tagline")]'
+            '/a[contains(@class, "author")]'
+        )
         comments = []
         for comment_div in comments_divs:
             try:
-                text_div = comment_div.find_element(By.XPATH, comment_text_xpath)
+                text_div = comment_div.find_element(By.XPATH, text_xpath)
                 text = text_div.text.strip()
                 if text:
-                    comment = {"text": text}
+                    author = comment_div.find_element(By.XPATH, author_xpath).text
+                    comment = {"text": text, "author": author}
                     childern_divs = comment_div.find_elements(By.XPATH, childs_xpath)
                     if len(childern_divs) > 0:
                         children = self._extract_comments(childern_divs)
