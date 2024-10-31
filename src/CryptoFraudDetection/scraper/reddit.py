@@ -19,11 +19,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 class RedditScraper:
-    def __init__(self, base_url:str, subreddit:str, search_query:str, limit:int=5, wait_range:tuple[int,int] = (2,5), cookies_file:str="cookies/reddit-cookies.pkl"):
+    def __init__(self, logger: logging.Logger, base_url:str, subreddit:str, search_query:str, limit:int=5, wait_range:tuple[int,int] = (2,5), cookies_file:str="cookies/reddit-cookies.pkl"):
+        self._logger:logging.Logger = logger
         self._base_url:str = base_url
         self._subreddit:str = subreddit
         self._search_query:str = search_query
@@ -41,9 +39,9 @@ class RedditScraper:
                 cookies = pickle.load(file)
                 for cookie in cookies:
                     self.driver.add_cookie(cookie)
-            logger.info("Cookies loaded successfully.")
+            self._logger.info("Cookies loaded successfully.")
         except FileNotFoundError:
-            logger.info("No cookies file found. Proceeding without loading cookies.")
+            self._logger.info("No cookies file found. Proceeding without loading cookies.")
             
     def _wait(self):
         """Wait for a random time between the specified range."""
@@ -56,10 +54,9 @@ class RedditScraper:
             element = WebDriverWait(self.driver, timeout).until(
                 EC.presence_of_element_located(locator)
             )
-            self._wait()
             return element
         except TimeoutException:
-            logger.error(f"Timeout waiting for element with locator: {locator}")
+            self._logger.error(f"Timeout waiting for element with locator: {locator}")
             return None
 
 
@@ -73,7 +70,7 @@ class RedditScraper:
             (By.XPATH, '//div[contains(@class, "search-result-link")]'), timeout=10
         )
         if not search_results_loaded:
-            logger.error("Search results did not load.")
+            self._logger.error("Search results did not load.")
             return
         
         # Extract list of posts
@@ -105,30 +102,48 @@ class RedditScraper:
             }
             return post
         except Exception as e:
-            logger.error(f"Error extracting post details: {e}")
+            self._logger.error(f"Error extracting post details: {e}")
             return {}
 
-    def load_post_content(self, post):
+
+    def _extract_comments(self, comment_div) -> dict:
+        return {}
+    
+    def _extract_post_text(self):
+        """Wait for, locate and extract the post text"""
+        post_text_locator = (
+            By.XPATH,
+            '//div[contains(@class, "entry")]//div[contains(@class, "md")]',
+        )
+        post_text_div = self._wait_for_element(
+            post_text_locator, timeout=10
+        )
+        return post_text_div.text
+
+
+    def scrape_post_content(self, url) -> dict:
         """Load content from an individual post URL."""
+        self._wait()
+        
         try:
-            self.driver.get(post["url"])
-            # Wait for the content to load
-            content_div = self._wait_for_element(
-                (By.XPATH, '//div[contains(@class, "entry")]//div[contains(@class, "md")]'), timeout=10
-            )
-            if content_div:
-                post["content"] = content_div.text
-            else:
-                post["content"] = None
+            self.driver.get(url)
         except Exception as e:
-            logger.error(f"Error loading content for {post['url']}: {e}")
-            post["content"] = None
+            self._logger.error(f"Error loading post URL {url}: {e}")
+        
+        return {
+            "id": '',
+            "author": '',
+            "text": self._extract_post_text(),
+            'children': [],
+            'date': '',
+            'score': 0,
+        }
 
     def _save_cookies(self):
         """Save cookies for future sessions."""
         with open(self._cookies_file, "wb") as file:
             pickle.dump(self.driver.get_cookies(), file)
-            logger.info("Cookies saved successfully.")
+            self._logger.info("Cookies saved successfully.")
 
     def quit(self):
         """Quit the WebDriver session."""
@@ -140,7 +155,7 @@ class RedditScraper:
             self._load_cookies()
             self.search_posts()
             for post in self.post_data:
-                self.load_post_content(post)
+                self.scrape_post_content(post)
             self._save_cookies()
         finally:
             self.quit()
