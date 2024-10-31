@@ -68,19 +68,21 @@ class TwitterScraper:
     def login_save_cookies(
         self,
         headless=False,
+        path="data/cookies_x_1_0.json",
     ) -> None:
         """
         Logs into Twitter and saves cookies for later use.
 
         Args:
             headless (bool): Whether to run the scraper in headless mode.
+            path (str): Path to the file where cookies should be saved.
         """
         driver = utils.get_driver(headless=headless)
 
         try:
             self.navigate_to_login_page(driver)
             self.enter_credentials(driver)
-            self.save_cookies(driver)
+            self.save_cookies(driver, path)
 
         finally:
             driver.quit()
@@ -158,15 +160,17 @@ class TwitterScraper:
     def save_cookies(
         self,
         driver: webdriver.Firefox,
+        path: str,
     ) -> None:
         """
         Saves cookies after login for future sessions.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
+            path (str): Path to the file where cookies should be saved.
         """
         cookies = driver.get_cookies()
-        with open("data/cookies_x_1_0.json", "w", encoding="utf-8") as file:
+        with open(path, "w", encoding="utf-8") as file:
             json.dump(cookies, file)
         self.logger.info("Cookies saved.")
 
@@ -206,7 +210,7 @@ class TwitterScraper:
         self,
         tweet_count: int = 1,
         search_query: str = "Bitcoin",
-        headless: bool = False,
+        headless: bool = True,
     ) -> dict[str, list[str]]:
         """
         Scrapes tweets using saved cookies and returns the result in a DataFrame.

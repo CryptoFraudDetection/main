@@ -16,25 +16,28 @@ import time
 import json, os
 import csv
 import random
+
+logger_ = Logger("logger")
 ```
 
 ```{python}
-x_scrapper = twitter_scrapper.TwitterScraper(os.getenv("TWITTER_USERNAME"), os.getenv("TWITTER_PASSWORD"), Logger("logger"))
+x_scrapper = twitter_scrapper.TwitterScraper(
+    logger=logger_, 
+    username=os.getenv("TWITTER_USERNAME"), 
+    password=os.getenv("TWITTER_PASSWORD"), 
+    cookies_file_path="../data/cookies_x_1_0.json"
+)
 ```
 
 ```{python}
-x_scrapper.login_save_cookies()
+#x_scrapper.login_save_cookies(../data_cookies_x_1_1.json)
 ```
 
 ```{python}
-df_test = x_scrapper.scrape_with_cookies()
+dict_test = x_scrapper.scrape_with_cookies(headless=False)
 ```
 
 ```{python}
-df_test['Tweet'].values
-```
-
-```{python}
-df_test
+dict_test
 ```
 
