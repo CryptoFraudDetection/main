@@ -152,7 +152,9 @@ class RedditScraper:
                     comment = {"text": text}
                     childern_divs = comment_div.find_elements(By.XPATH, childs_xpath)
                     if len(childern_divs) > 0:
-                        comment["children"] = self._extract_comments(childern_divs)
+                        children = self._extract_comments(childern_divs)
+                        if children:
+                            comment["children"] = children
                     comments.append(comment)
             except NoSuchElementException as e:
                 pass
@@ -225,7 +227,7 @@ class RedditScraper:
             "id": self._extract_post_id(),
             "author": self._extract_post_author(),
             "text": self._extract_post_text(),
-            'children': [],
+            'children': self._extract_all_comments(),
             'date': self._extract_post_date(),
             'score': 0,
         }
