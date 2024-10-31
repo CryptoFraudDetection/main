@@ -1,0 +1,39 @@
+---
+jupyter: python3
+---
+
+```{python}
+import os
+
+from CryptoFraudDetection.scraper.twitter import TwitterScraper
+from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
+from CryptoFraudDetection.scraper.comparitech import ComparitechScraper
+from CryptoFraudDetection.utils.logger import Logger
+
+logger_ = Logger("logger")
+```
+
+```{python}
+twitter_scraper = TwitterScraper(
+    logger=logger_,
+    username=os.getenv("TWITTER_USERNAME"),
+    password=os.getenv("TWITTER_PASSWORD"),
+    cookies_file_path="../data/raw/cookies/x.json",
+)
+
+google_results_scraper = GoogleResultsScraper(
+    logger=logger_,
+)
+
+comparitech_scraper = ComparitechScraper(
+    logger=logger_,
+)
+```
+
+```{python}
+dict_test = twitter_scraper.scrape_with_cookies(headless=False)
+```
+
+```{python}
+dict_test
+```
