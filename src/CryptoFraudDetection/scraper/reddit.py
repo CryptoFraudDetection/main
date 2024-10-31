@@ -178,6 +178,40 @@ class RedditScraper:
         post_text_div = self._wait_for_element(post_text_locator)
         return post_text_div.text
 
+    def _extract_post_id(self):
+        """Wait for, locate and extract the post id"""
+        post_id_locator = (
+            By.XPATH,
+            '//div[contains(@class, "entry")]//form[contains(@class, "usertext warn-on-unload")]'
+        )
+        post_id_form = self._wait_for_element(
+            post_id_locator, timeout=10
+        )    
+        return post_id_form.get_attribute('id')
+    
+    def _extract_post_author(self):
+        """Wait for, locate and extract the post author"""
+        post_author_locator = (
+            By.XPATH,
+            '//div[contains(@class, "entry")]//a[contains(@href, "https://old.reddit.com/user/")]'
+        )
+        post_author_a = self._wait_for_element(
+            post_author_locator, timeout=10
+        )
+        return post_author_a.text
+    
+    def _extract_post_date(self):
+        """Wair for, locate and extract the post date"""
+        post_date_locator = (
+            By.XPATH,
+            '//div[contains(@class, "entry")]//p[contains(@class, "tagline")]//time'
+        )
+        post_date_datetime = self._wait_for_element(
+            post_date_locator, timeout=10
+        )
+        
+        return post_date_datetime.get_attribute('datetime')
+            
     def scrape_post_content(self, url) -> dict:
         """Load content from an individual post URL."""
         self._wait()
@@ -188,12 +222,12 @@ class RedditScraper:
             self._logger.error(f"Error loading post URL {url}: {e}")
 
         return {
-            "id": "",
-            "author": "",
+            "id": self._extract_post_id(),
+            "author": self._extract_post_author(),
             "text": self._extract_post_text(),
-            "children": [],
-            "date": "",
-            "score": 0,
+            'children': [],
+            'date': self._extract_post_date(),
+            'score': 0,
         }
 
     def _save_cookies(self):
