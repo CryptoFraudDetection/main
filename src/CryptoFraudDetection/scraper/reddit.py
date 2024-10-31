@@ -13,21 +13,31 @@ import pandas as pd
 import pickle
 import random
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
+
 class RedditScraper:
-    def __init__(self, logger: logging.Logger, base_url:str, subreddit:str, search_query:str, limit:int=5, wait_range:tuple[int,int] = (2,5), cookies_file:str="cookies/reddit-cookies.pkl"):
-        self._logger:logging.Logger = logger
-        self._base_url:str = base_url
-        self._subreddit:str = subreddit
-        self._search_query:str = search_query
-        self._limit:int = limit
-        self._wait_range:tuple[int,int] = wait_range
-        self._cookies_file:str = cookies_file
+    def __init__(
+        self,
+        logger: logging.Logger,
+        base_url: str,
+        subreddit: str,
+        search_query: str,
+        limit: int = 5,
+        wait_range: tuple[int, int] = (2, 5),
+        cookies_file: str = "cookies/reddit-cookies.pkl",
+    ):
+        self._logger: logging.Logger = logger
+        self._base_url: str = base_url
+        self._subreddit: str = subreddit
+        self._search_query: str = search_query
+        self._limit: int = limit
+        self._wait_range: tuple[int, int] = wait_range
+        self._cookies_file: str = cookies_file
         self.driver: webdriver.Firefox = webdriver.Firefox()
         self.post_data: list[dict] = []
 
@@ -41,13 +51,14 @@ class RedditScraper:
                     self.driver.add_cookie(cookie)
             self._logger.info("Cookies loaded successfully.")
         except FileNotFoundError:
-            self._logger.info("No cookies file found. Proceeding without loading cookies.")
-            
+            self._logger.info(
+                "No cookies file found. Proceeding without loading cookies."
+            )
+
     def _wait(self):
         """Wait for a random time between the specified range."""
         time.sleep(random.uniform(*self._wait_range))
 
-    
     def _wait_for_element(self, locator, timeout=10):
         """Wait for an element to be present."""
         try:
@@ -59,12 +70,13 @@ class RedditScraper:
             self._logger.error(f"Timeout waiting for element with locator: {locator}")
             return None
 
-
     def search_posts(self) -> None:
         """Search for posts in a specific subreddit."""
         url = f"{self._base_url}/{self._subreddit}/search?q={self._search_query}&restrict_sr=on&sort=new&t=all&limit={self._limit}&after=id___"
-        self.driver.get(url)   # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
-        
+        self.driver.get(
+            url
+        )  # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
+
         # Wait for search results to load
         search_results_loaded = self._wait_for_element(
             (By.XPATH, '//div[contains(@class, "search-result-link")]'), timeout=10
@@ -72,12 +84,12 @@ class RedditScraper:
         if not search_results_loaded:
             self._logger.error("Search results did not load.")
             return
-        
+
         # Extract list of posts
         search_results = self.driver.find_elements(
             By.XPATH, '//div[contains(@class, "search-result-link")]'
         )
-        
+
         # Process each post
         # TODO: explain more and why?
         for result in search_results:
@@ -92,51 +104,96 @@ class RedditScraper:
             post = {
                 "id": result.get_attribute("data-fullname"),
                 # TODO: looking for same object two times
-                "title": result.find_element(By.XPATH, './/a[contains(@class, "search-title")]').text,
-                "url": result.find_element(By.XPATH, './/a[contains(@class, "search-title")]').get_attribute("href"),
-                "score": result.find_element(By.XPATH, './/span[contains(@class, "search-score")]').text,
-                "comment": result.find_element(By.XPATH, './/a[contains(@class, "search-comments")]').text,
-                "date": result.find_element(By.XPATH, ".//time[@datetime]").get_attribute("datetime"),
-                "author": result.find_element(By.XPATH, './/a[contains(@class, "author")]').text,
-                "author_url": result.find_element(By.XPATH, './/a[contains(@class, "author")]').get_attribute("href"),
+                "title": result.find_element(
+                    By.XPATH, './/a[contains(@class, "search-title")]'
+                ).text,
+                "url": result.find_element(
+                    By.XPATH, './/a[contains(@class, "search-title")]'
+                ).get_attribute("href"),
+                "score": result.find_element(
+                    By.XPATH, './/span[contains(@class, "search-score")]'
+                ).text,
+                "comment": result.find_element(
+                    By.XPATH, './/a[contains(@class, "search-comments")]'
+                ).text,
+                "date": result.find_element(
+                    By.XPATH, ".//time[@datetime]"
+                ).get_attribute("datetime"),
+                "author": result.find_element(
+                    By.XPATH, './/a[contains(@class, "author")]'
+                ).text,
+                "author_url": result.find_element(
+                    By.XPATH, './/a[contains(@class, "author")]'
+                ).get_attribute("href"),
             }
             return post
         except Exception as e:
             self._logger.error(f"Error extracting post details: {e}")
             return {}
 
+    def _extract_comments(self, comments_divs) -> dict:
+        childs_xpath = (
+            './div[contains(@class, "child")]'
+            "/div"
+            '/div[contains(@class, "comment")]'
+        )
+        comment_text_xpath = (
+            './div[contains(@class, "entry")]'
+            '/form[contains(@class, "usertext")]'
+            '/div[contains(@class, "usertext-body")]'
+            '/div[contains(@class, "md")]'
+        )
+        comments = []
+        for comment_div in comments_divs:
+            try:
+                text_div = comment_div.find_element(By.XPATH, comment_text_xpath)
+                text = text_div.text.strip()
+                if text:
+                    comment = {"text": text}
+                    childern_divs = comment_div.find_elements(By.XPATH, childs_xpath)
+                    if len(childern_divs) > 0:
+                        comment["children"] = self._extract_comments(childern_divs)
+                    comments.append(comment)
+            except NoSuchElementException as e:
+                pass
 
-    def _extract_comments(self, comment_div) -> dict:
-        return {}
-    
+        return comments
+
+    def _extract_all_comments(self):
+        comments_xpath = (
+            '//div[contains(@class, "commentarea")]'
+            '/div[contains(@class, "nestedlisting")]'
+            '/div[contains(@class, "comment")]'
+        )
+        self._wait_for_element((By.XPATH, comments_xpath))
+        comments_divs = self.driver.find_elements(By.XPATH, comments_xpath)
+        return self._extract_comments(comments_divs)
+
     def _extract_post_text(self):
         """Wait for, locate and extract the post text"""
         post_text_locator = (
             By.XPATH,
             '//div[contains(@class, "entry")]//div[contains(@class, "md")]',
         )
-        post_text_div = self._wait_for_element(
-            post_text_locator, timeout=10
-        )
+        post_text_div = self._wait_for_element(post_text_locator)
         return post_text_div.text
-
 
     def scrape_post_content(self, url) -> dict:
         """Load content from an individual post URL."""
         self._wait()
-        
+
         try:
             self.driver.get(url)
         except Exception as e:
             self._logger.error(f"Error loading post URL {url}: {e}")
-        
+
         return {
-            "id": '',
-            "author": '',
+            "id": "",
+            "author": "",
             "text": self._extract_post_text(),
-            'children': [],
-            'date': '',
-            'score': 0,
+            "children": [],
+            "date": "",
+            "score": 0,
         }
 
     def _save_cookies(self):
