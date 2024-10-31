@@ -168,4 +168,4 @@ cython_debug/
 wandb
 
 # cookies
-cookies_x_1_0.json
+data/raw/cookies/*.json

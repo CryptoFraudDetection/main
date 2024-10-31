@@ -22,6 +22,7 @@ from selenium.common.exceptions import (
     NoSuchElementException,
     TimeoutException,
     ElementNotInteractableException,
+    JavascriptException,
 )
 
 import CryptoFraudDetection.scraper.utils as utils
@@ -49,7 +50,7 @@ class TwitterScraper:
         logger: Logger,
         username: str = "",
         password: str = "",
-        cookies_file_path: str = "data/cookies_x_1_0.json",
+        cookies_file_path: str = "",
     ) -> None:
         """
         Initializes the TwitterScraper class with optional login credentials and a logger.
@@ -67,15 +68,15 @@ class TwitterScraper:
 
     def login_save_cookies(
         self,
-        headless=False,
-        path="data/cookies_x_1_0.json",
+        path: str,
+        headless: bool = False,
     ) -> None:
         """
         Logs into Twitter and saves cookies for later use.
 
         Args:
-            headless (bool): Whether to run the scraper in headless mode.
             path (str): Path to the file where cookies should be saved.
+            headless (bool): Whether to run the scraper in headless mode.
         """
         driver = utils.get_driver(headless=headless)
 
@@ -109,11 +110,17 @@ class TwitterScraper:
 
             try:
                 driver.execute_script("arguments[0].click();", login_button)
-            except WebDriverException as e:
-                self.logger.warning(f"WebDriverException encountered: {e}")
+            except JavascriptException as e:
+                self.logger.handle_exception(
+                    JavascriptException,
+                    f"Cannot click login button: {e}",
+                )
 
         except NoSuchElementException as e:
-            self.logger.warning(f"NoSuchElementException encountered: {e}")
+            self.logger.handle_exception(
+                NoSuchElementException,
+                f"Login button not found: {e}",
+            )
 
     def enter_credentials(
         self,
@@ -137,8 +144,10 @@ class TwitterScraper:
             username_field.send_keys(self.username)
             username_field.send_keys(Keys.RETURN)
         except NoSuchElementException as e:
-            self.logger.warning(f"Username field not found: {e}")
-            return
+            self.logger.handle_exception(
+                NoSuchElementException,
+                f"Username field not found: {e}",
+            )
 
         try:
             # Enter password
@@ -150,8 +159,10 @@ class TwitterScraper:
             password_field.send_keys(self.password)
             password_field.send_keys(Keys.RETURN)
         except NoSuchElementException as e:
-            self.logger.warning(f"Password field not found: {e}")
-            return
+            self.logger.handle_exception(
+                NoSuchElementException,
+                f"Password field not found: {e}",
+            )
 
         self.random_sleep(
             interval_1=(4, 6), probability_interval_1=1, probability_interval_2=0.0
