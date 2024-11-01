@@ -8,6 +8,7 @@ Description:
 import os
 import time
 import json
+import re
 import random
 from typing import List, Tuple
 
@@ -18,7 +19,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import (
-    WebDriverException,
     NoSuchElementException,
     TimeoutException,
     ElementNotInteractableException,
@@ -183,7 +183,7 @@ class TwitterScraper:
         cookies = driver.get_cookies()
         with open(path, "w", encoding="utf-8") as file:
             json.dump(cookies, file)
-        self.logger.info("Cookies saved.")
+        self.logger.debug("Cookies saved.")
 
     def random_sleep(
         self,
@@ -271,6 +271,7 @@ class TwitterScraper:
                         ValueError, f"Invalid JSON format in {self.cookies_file_path}."
                     )
                     return
+        # Check if the cookie file content is provided as an environment variable
         elif cookie_file_content := os.getenv("COOKIE_FILE_CONTENT_X"):
             try:
                 cookies = json.loads(cookie_file_content)
@@ -283,6 +284,7 @@ class TwitterScraper:
                     f"Invalid JSON format in COOKIE_FILE_CONTENT_X environment variable. {e}",
                 )
                 return
+        # If neither the file nor the environment variable is available, raise an error
         else:
             self.logger.handle_exception(
                 FileNotFoundError,
@@ -318,14 +320,16 @@ class TwitterScraper:
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
         """
+        # Navigate to the Explore page
         driver.get("https://www.x.com/explore")
         self.random_sleep(
             interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0
         )
-        self.logger.info(
+        self.logger.debug(
             f"Page title after loading cookies and navigating to Explore: {driver.title}"
         )
 
+        # Handle any popups that may appear
         try:
             close_button_wait = WebDriverWait(driver, 10)
             close_button = close_button_wait.until(
@@ -334,15 +338,15 @@ class TwitterScraper:
                 )
             )
             driver.execute_script("arguments[0].click();", close_button)
-            self.logger.info("Close button clicked successfully.")
+            self.logger.debug("Close button clicked successfully.")
 
         except (NoSuchElementException, TimeoutException) as e:
-            self.logger.warning(
+            self.logger.handle_exception(NoSuchElementException,
                 f"Close button not found or not clickable within the timeout period. {e}"
             )
 
-        except WebDriverException as e:
-            self.logger.warning(
+        except JavascriptException as e:
+            self.logger.handle_exception(JavascriptException,
                 f"WebDriverException encountered when trying to click the close button. {e}"
             )
 
@@ -358,6 +362,7 @@ class TwitterScraper:
             driver (webdriver.Firefox): Selenium WebDriver instance.
             search_query (str): The search query to look for.
         """
+        # Search for the query
         try:
             search_bar = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable(
@@ -374,19 +379,19 @@ class TwitterScraper:
                 probability_interval_2=0.05,
             )
         except NoSuchElementException:
-            self.logger.error("Search bar not found on the page.")
+            self.logger.handle_exception(NoSuchElementException, "Search bar not found on the page.")
         except TimeoutException:
-            self.logger.error(
+            self.logger.handle_exception(TimeoutException,
                 "Search bar did not become clickable within the timeout period."
             )
         except ElementNotInteractableException:
-            self.logger.error("Search bar was found but could not be interacted with.")
+            self.logger.handle_exception(ElementNotInteractableException, "Search bar was found but could not be interacted with.")
 
     def scrape_tweets(
         self,
         driver: webdriver.Firefox,
         tweet_count: int,
-    ) -> dict[str, list[str]]:
+    ) -> dict[str, List[str]]:
         """
         Scrapes the specified number of tweets and returns a dictionary of tweet data.
 
@@ -396,27 +401,29 @@ class TwitterScraper:
 
         Returns:
             dict: Dictionary containing tweet data with keys "Username", "Tweet", "Timestamp",
-                  "Likes", and "Impressions". Each key maps to a list of scraped values for that
-                  attribute.
+                "Likes", "Impressions", "Comments", "Reposts", and "Bookmarks".
+                Each key maps to a list of scraped values for that attribute.
         """
         tweets_scraped = 0
         tweet_data = []
 
         self._check_authentication()
-
+        
+        # Scrape tweets until the specified count is reached
         while tweets_scraped < tweet_count:
             tweets = self.get_tweets(driver)
             for tweet in tweets:
                 try:
-                    username, content, timestamp, likes, impressions = (
+                    # Extract tweet details
+                    username, content, timestamp, likes, impressions, comments, reposts, bookmarks = (
                         self.extract_tweet_details(tweet)
                     )
                     tweet_data.append(
-                        [username, content, timestamp, likes, impressions]
+                        [username, content, timestamp, likes, impressions, comments, reposts, bookmarks]
                     )
                     tweets_scraped += 1
                     self.logger.info(
-                        f"Scraped tweet {tweets_scraped}/{tweet_count}: {username} - {content[:50]}"
+                        f"Scraped tweet {tweets_scraped}/{tweet_count}"
                     )
 
                 except (NoSuchElementException, TimeoutException) as e:
@@ -427,24 +434,31 @@ class TwitterScraper:
                     self.logger.warning(
                         f"Attribute missing in tweet details extraction: {e}"
                     )
+            
             self.random_sleep(
                 interval_1=(3, 7),
                 probability_interval_1=0.85,
                 probability_interval_2=0.1,
             )
 
+            # Scroll to the bottom of the page to load more tweets
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             self.random_sleep(
                 interval_1=(2, 6), probability_interval_1=1, probability_interval_2=0.0
             )
 
-        self.logger.info("Tweets scraped into dictionary.")
+        self.logger.debug("Tweets scraped into dictionary.")
+        
+        # Return the scraped tweet data as a dictionary
         return {
             "Username": [row[0] for row in tweet_data],
             "Tweet": [row[1] for row in tweet_data],
             "Timestamp": [row[2] for row in tweet_data],
             "Likes": [row[3] for row in tweet_data],
             "Impressions": [row[4] for row in tweet_data],
+            "Comments": [row[5] for row in tweet_data],
+            "Reposts": [row[6] for row in tweet_data],
+            "Bookmarks": [row[7] for row in tweet_data],
         }
 
     def get_tweets(
@@ -460,6 +474,7 @@ class TwitterScraper:
         Returns:
             List[WebElement]: List of tweet elements.
         """
+        # Wait for the tweets to load and return the list of tweet elements
         try:
             return WebDriverWait(driver, 10).until(
                 EC.presence_of_all_elements_located(
@@ -467,78 +482,91 @@ class TwitterScraper:
                 )
             )
         except TimeoutException as e:
-            self.logger.warning(f"Timed out while waiting for tweet elements: {e}")
+            self.logger.handle_exception(TimeoutException, f"Timed out while waiting for tweet elements: {e}")
         except NoSuchElementException as e:
-            self.logger.warning(f"No tweet elements found on the page: {e}")
+            self.logger.handle_exception(NoSuchElementException, f"No tweet elements found on the page: {e}")
 
         return []
 
     def extract_tweet_details(
         self,
         tweet: WebElement,
-    ) -> Tuple[str, str, str, str, str]:
+    ) -> Tuple[str, str, str, str, str, str, str, str]:
         """
-        Extracts details from a tweet such as username, content, timestamp, likes, and impressions.
+        Extracts details from a tweet such as username, content, timestamp, likes, impressions,
+        comments, reposts, and bookmarks.
 
         Args:
             tweet (WebElement): The tweet element.
 
         Returns:
-            Tuple[str, str, str, str, str]: Extracted tweet details
-                (username, content, timestamp, likes, impressions).
+            Tuple[str, str, str, str, str, str, str, str]: Extracted tweet details
+                (username, content, timestamp, likes, impressions, comments, reposts, bookmarks).
         """
-        # Setze Standardwerte für alle Details
+        # Put default values in case of missing elements
         username = "Unknown"
         content = ""
         timestamp = "N/A"
         likes = "0"
         impressions = "N/A"
+        comments = "0"
+        reposts = "0"
+        bookmarks = "0"
 
+        # Extract username
         try:
             username = tweet.find_element(
                 By.XPATH, ".//span[contains(text(), '@')]"
             ).text
         except NoSuchElementException:
-            self.logger.info("Username element not found; using default 'Unknown'.")
+            self.logger.debug("Username element not found; using default 'Unknown'.")
 
+        # Extract content
         try:
             content = tweet.find_element(
                 By.XPATH, ".//div[@data-testid='tweetText']"
             ).text
         except NoSuchElementException:
-            self.logger.info("Content element not found; using empty default.")
+            self.logger.debug("Content element not found; using empty default.")
 
+        # Extract date and time
         try:
             timestamp_element = tweet.find_element(By.XPATH, ".//time")
             if timestamp_ := timestamp_element.get_attribute("datetime"):
                 timestamp = timestamp_
         except NoSuchElementException:
-            self.logger.info("Timestamp element not found; using default 'N/A'.")
+            self.logger.debug("Timestamp element not found; using default 'N/A'.")
 
         # Extract likes
         try:
-            likes = (
-                tweet.find_element(
-                    By.XPATH, ".//div[@data-testid='like']//span"
-                ).get_attribute("innerHTML")
-                or "0"
-            )
+            likes_element = tweet.find_element(By.XPATH, ".//button[@data-testid='like']//span")
+            likes = likes_element.text or "0"
         except NoSuchElementException:
-            self.logger.info("Likes element not found; defaulting to 0.")
+            self.logger.debug("Likes element not found; defaulting to 0.")
 
         # Extract impressions
         try:
-            impressions = tweet.find_element(
-                By.XPATH, ".//div[@data-testid='view']"
-            ).text
-            if impressions == "":
-                impressions = (
-                    tweet.find_element(
-                        By.XPATH, ".//div[@data-testid='view']//span"
-                    ).get_attribute("innerHTML")
-                    or "N/A"
-                )
+            impressions_element = tweet.find_element(By.XPATH, ".//a[@aria-label][contains(@aria-label, 'views')]//span")
+            impressions = impressions_element.text or "N/A"
         except NoSuchElementException:
-            self.logger.info("Impressions element not found; defaulting to N/A.")
+            self.logger.debug("Impressions element not found; defaulting to N/A.")
 
-        return username, content, timestamp, likes, impressions
+        # Check for missing values and update from aria-label if necessary
+        try:
+            aria_label = tweet.find_element(By.XPATH, ".//div[@role='group']").get_attribute("aria-label")
+            
+            if comments == "0":  # Update comments if default
+                comments = re.search(r"(\d+(?:,\d+)*) replies", aria_label).group(1).replace(",", "")
+            if reposts == "0":  # Update reposts if default
+                reposts = re.search(r"(\d+(?:,\d+)*) reposts", aria_label).group(1).replace(",", "")
+            if likes == "0":  # Update likes if default
+                likes = re.search(r"(\d+(?:,\d+)*) likes", aria_label).group(1).replace(",", "")
+            if bookmarks == "0":  # Update bookmarks if default
+                bookmarks = re.search(r"(\d+(?:,\d+)*) bookmarks", aria_label).group(1).replace(",", "")
+            if impressions == "N/A":  # Update impressions if default
+                impressions = re.search(r"(\d+(?:,\d+)*) views", aria_label).group(1).replace(",", "")
+        
+        except (NoSuchElementException, AttributeError):
+            self.logger.debug("Failed to parse some values from aria-label; using defaults where necessary.")
+
+        return username, content, timestamp, likes, impressions, comments, reposts, bookmarks

@@ -58,3 +58,7 @@ def test_scrape_with_cookies():
     assert "Timestamp" in tweets_data
     assert "Likes" in tweets_data
     assert "Impressions" in tweets_data
+    assert "Comments" in tweets_data
+    assert "Reposts" in tweets_data
+    assert "Bookmarks" in tweets_data
+
