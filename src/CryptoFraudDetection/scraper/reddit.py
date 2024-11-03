@@ -194,8 +194,21 @@ class RedditScraper:
         )
         post_id_form = self._wait_for_element(
             post_id_locator, timeout=10
-        )    
-        return post_id_form.get_attribute('id')
+        )   
+        
+        # try to Remove the 'form-' prefix
+        try:
+            post_id= post_id_form.get_attribute('id')
+            
+            if post_id and post_id.startswith('form-'):
+                post_id = post_id.replace('form-', '')
+        
+        # Handle cases where 'post_id_form' or 'get_attribute' fails
+        except:
+            post_id = None
+           
+        return post_id
+        
     
     def _extract_post_author(self):
         """Wait for, locate and extract the post author"""
