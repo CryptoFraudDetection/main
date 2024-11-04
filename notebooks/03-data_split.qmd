@@ -1,0 +1,41 @@
+---
+jupyter: python3
+---
+
+```{python}
+import pandas as pandas
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import yfinance as yf
+```
+
+```{python}
+
+
+crypto_symbols = ['BTC-USD', 'ETH-USD', 'AVAX-USD', 'FTT-USD', 'LUNC-USD', 'BF-USD']
+
+crypto_data = yf.download(crypto_symbols, period='max', auto_adjust=True)['Close']
+
+
+fig, axes = plt.subplots(len(crypto_symbols), 1, figsize=(14, 14), sharex=True)
+fig.suptitle('Cryptocurrency Price of some Scam and non-scam Tokens', fontsize=16)
+
+for i, symbol in enumerate(crypto_symbols):
+    axes[i].plot(crypto_data.index, crypto_data[symbol], label=symbol)
+    axes[i].set_ylabel('Price in USD')
+    axes[i].legend()
+    axes[i].grid(True)
+
+plt.xlabel('Date')
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
+```
+
+Wie Data Split machen?
+verschiedene Splits oder alle Gleich?
+Immer genau vor Einsturz?
+Wie bei non-Scam Token?
+Evtl Einsturz auch mal im Train für vorhersage ob es wieder hoch geht?
+
