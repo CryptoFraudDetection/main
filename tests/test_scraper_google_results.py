@@ -6,7 +6,7 @@ import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
 
-logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
+logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="/logs")
 
 
 def test_initialization():
