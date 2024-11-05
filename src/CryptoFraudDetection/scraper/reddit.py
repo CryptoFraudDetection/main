@@ -121,9 +121,9 @@ class RedditScraper:
         self,
         subreddit: str,
         search_query: str,
-        limit: int = 5,
+        limit: int = 10000,
         oldest_post_id: str = None,
-        max_num_posts_per_search=5,
+        max_num_posts_per_search=100,
     ) -> None:
         """Search for posts in a specific subreddit."""
         for num_processed_posts in range(0, limit, max_num_posts_per_search):
