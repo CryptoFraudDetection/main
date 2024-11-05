@@ -139,6 +139,8 @@ class RedditScraper:
                 + "&t=all"
                 + f"&limit={search_limit}"
             )
+            # TODO: start from date x
+            # TODO: end at date x
             if oldest_post_id:
                 url += f"&after={oldest_post_id}"
             # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
