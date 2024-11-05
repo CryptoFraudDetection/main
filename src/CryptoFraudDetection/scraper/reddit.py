@@ -161,6 +161,8 @@ class RedditScraper:
             # Extract post metadata from the html elements
             for result in search_results:
                 post = self._extract_post_metadata(result)
+                post['subreddit'] = subreddit
+                post['search_query'] = search_query
                 self.post_data.append(post)
         
             # Get the ID of the oldest post to use in the next search
