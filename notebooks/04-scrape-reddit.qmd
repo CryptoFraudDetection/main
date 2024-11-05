@@ -19,11 +19,11 @@ MODE=ScraperNotebookMode.WRITE
 ```
 
 ```{python}
-data = scrape_reddit(logger, 'r/CryptoCurrency','Terra Luna',limit=3,max_num_posts_per_search=2)
+data = scrape_reddit(logger, 'r/CryptoCurrency','Terra Luna',limit=6,max_num_posts_per_search=2)
 ```
 
 ```{python}
-insert_dataframe('reddit',data)
+insert_dataframe(logger, 'reddit',data)
 ```
 
 ```{python}
