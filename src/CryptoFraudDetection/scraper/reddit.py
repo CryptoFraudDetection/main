@@ -234,15 +234,15 @@ class RedditScraper:
         
         return post
     
-    def get_posts_without_text(self):
+    def get_posts_without_content(self):
         """Get posts without text content."""
         return [post for post in self.post_data if post.get("text") is None]
     
     def scrape_all_post_contents(self):
         """Scrape the content of posts in self.post_data."""
-        for post in self.get_posts_without_text():
+        for post in self.get_posts_without_content():
             self.scrape_post_content(post)
-        return len(self.get_posts_without_text())
+        return len(self.get_posts_without_content())
 
     def to_dataframe(self):
         """Convert scraped data to a pandas DataFrame."""
