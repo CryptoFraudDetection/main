@@ -6,8 +6,9 @@ Description:
 """
 
 from typing import Any, Dict, List, Tuple
+import logging
 import pandas as pd
-from elasticsearch.helpers import bulk
+from elasticsearch.helpers import bulk, BulkIndexError
 
 from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
 
@@ -15,7 +16,7 @@ es = get_elasticsearch_client()
 
 
 def insert_dataframe(
-    index: str, df: pd.DataFrame
+    logger:logging.Logger, index: str, df: pd.DataFrame
 ) -> Tuple[int, int | List[Dict[str, Any]]]:
     """
     Insert a pandas DataFrame into Elasticsearch.
@@ -27,7 +28,16 @@ def insert_dataframe(
     Returns:
     - dict: Elasticsearch bulk insert response.
     """
-    data = [
-        {"_index": index, "_source": record} for record in df.to_dict(orient="records")
-    ]
-    return bulk(client=es, actions=data)
+    if 'id' in df.columns:
+        data = [
+            {"_index": index, "_id": record['id'], "_op_type": 'create', "_source": record} for record in df.to_dict(orient="records")
+        ]
+    else:
+        data = [
+            {"_index": index, "_source": record} for record in df.to_dict(orient="records")
+        ]
+    try:
+        success_fail = bulk(client=es, actions=data, raise_on_error=False)
+    except BulkIndexError as e:
+        logger.info(f"Skipped some documents:\n{e}")
+    return success_fail
