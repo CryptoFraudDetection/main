@@ -14,11 +14,10 @@ def test_initialization():
     Test the initialization of the RedditScraper class
     """
     try:
-        scraper = RedditScraper(logger_, headless=False)
+        scraper = RedditScraper(logger_)
         scraper.start_driver()
     finally:
         scraper.quit()
-
 
 def test__extract_all_comments():
     """
@@ -56,24 +55,24 @@ def test_scrape_post_content():
     finally:
         scraper.quit()
 
-def test_get_post_list():
+def test_get_multipage_post_list():
     """
-    Test the get_post_list method of the RedditScraper class
+    Test the get_multipage_post_list method of the RedditScraper class
     """
     try:
-        scraper = RedditScraper(logger_)
+        scraper = RedditScraper(logger_, max_search_limit=2)
         scraper.start_driver()
-        posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
+        posts = scraper.get_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=3)
         assert isinstance(posts, list)
         assert len(posts) > 0
     finally:
         scraper.quit()
 
-def test_get_post_list_with_start_date():
+def test_get_multipage_post_list_with_start_date():
     try:
-        scraper = RedditScraper(logger_)
+        scraper = RedditScraper(logger_, max_search_limit=2)
         scraper.start_driver()
-        posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=100, start_date='2024-07-10', after_post_id='t3_1fh7myu', max_num_posts_per_search=2)
+        posts = scraper.get_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=100, start_date='2024-07-10', after_post_id='t3_1fh7myu')
         assert isinstance(posts, list)
         assert len(posts) == 4
     finally:
@@ -84,13 +83,14 @@ def test_scrape_reddit():
     """
     Test the RedditScraper class
     """
-    df = scrape_reddit(logger_,'r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
+    df = scrape_reddit(logger_,'r/CryptoCurrency', 'Terra Luna', limit=101)
     assert df is not None
-    assert len(df) > 0
-    
+    assert len(df) == 101
     
 if __name__ == '__main__':
+    # test_initialization()
+    # test__extract_all_comments()
     # test_scrape_post_content()
-    # test_get_post_list()
+    # test_get_multipage_post_list()
+    # test_get_multipage_post_list_with_start_date()
     test_scrape_reddit()
-    # test_get_post_list_with_start_date()

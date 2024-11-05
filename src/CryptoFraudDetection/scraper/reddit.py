@@ -28,19 +28,20 @@ class RedditScraper:
         wait_range: tuple[int, int] = (2, 5),
         cookies_file: str = "cookies/reddit-cookies.pkl",
         headless: bool = True,
+        max_search_limit: int = 100,
     ):
         self._logger: logging.Logger = logger
         self._base_url: str = base_url
         self._wait_range: tuple[int, int] = wait_range
         self._cookies_file: str = cookies_file
         self.headless: bool = headless
+        self._max_search_limit: int = max_search_limit
         
         self.driver = None
         self.post_data: list[dict] = []
 
     def start_driver(self):
         """Start the WebDriver session if not already started."""
-        # TODO: headless does not work, why?
         if self.driver is None:
             options = webdriver.FirefoxOptions()
             if self.headless:
@@ -120,56 +121,80 @@ class RedditScraper:
         except Exception as e:
             self._logger.error(f"Error extracting post details: {e}")
             return {}
+        
+    def get_post_list(self, subreddit: str, search_query: str, limit: int = 100, after_post_id:str=None) -> None:
+        """Search for posts in a specific subreddit, max 100"""
+        # TODO: check if it is limited to subreddit
+        if limit > self._max_search_limit:
+            raise ValueError(f"Limit must be less than {self._max_search_limit}")
+        url = (
+            self._base_url
+            + "/"
+            + subreddit
+            + "/search?q="
+            + search_query
+            + "&restrict_sr=on"
+            + "&sort=new"
+            + "&t=all"
+            + f"&limit={limit}"
+        )
+        # TODO: start from date x
+        if after_post_id:
+            url += f"&after={after_post_id}"
+        # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
+        self._wait()
+        self._logger.info(f"Loading URL: {url}")
+        self.driver.get(url)
 
-    def get_post_list(
+        # Wait for search results to load
+        self._wait_for_element(
+            (By.XPATH, '//div[contains(@class, "search-result-link")]')
+        )
+
+        # Extract list of posts
+        search_results = self.driver.find_elements(
+            By.XPATH, '//div[contains(@class, "search-result-link")]'
+        )
+
+        # Extract post metadata from the html elements
+        for result in search_results:
+            post = self._extract_post_metadata(result)
+            post['subreddit'] = subreddit
+            post['search_query'] = search_query
+            self.post_data.append(post)
+        
+        return search_results
+        
+
+    def get_multipage_post_list(
         self,
         subreddit: str,
         search_query: str,
         limit: int = 10000,
-        start_date: str = None,  # yyymmdd
+        start_date: str = None,
         after_post_id: str = None,
-        max_num_posts_per_search=100,
+        retry: int = 5,
     ) -> None:
-        """Search for posts in a specific subreddit."""
-        for num_processed_posts in range(0, limit, max_num_posts_per_search):
-            search_limit = min(max_num_posts_per_search, limit - num_processed_posts)
-            url = (
-                self._base_url
-                + "/"
-                + subreddit
-                + "/search?q="
-                + search_query
-                + "&restrict_sr=on"
-                + "&sort=new"
-                + "&t=all"
-                + f"&limit={search_limit}"
-            )
-            # TODO: start from date x
-            # TODO: end at date x
-            if after_post_id:
-                url += f"&after={after_post_id}"
-            # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
-            self._wait()
-            self._logger.info(f"Loading URL: {url}")
-            self.driver.get(url)
+        """Search for posts in a specific subreddit on multiple sites to get more then 100."""
+        for num_processed_posts in range(0, limit, self._max_search_limit):
+            search_limit = min(self._max_search_limit, limit - num_processed_posts)
+            
+            search_results = None
+            for _ in range(retry):
+                try:
+                    search_results = self.get_post_list(
+                        subreddit,
+                        search_query,
+                        search_limit,
+                        after_post_id
+                    )
+                    break
+                except Exception as e:
+                    self._logger.error(f"Error getting post list, retrying: {e}")
+                    self._wait()
+            if search_results is None:
+                raise f"Error getting post list, tried {retry} times: {e}"
 
-            # Wait for search results to load
-            self._wait_for_element(
-                (By.XPATH, '//div[contains(@class, "search-result-link")]')
-            )
-
-            # Extract list of posts
-            search_results = self.driver.find_elements(
-                By.XPATH, '//div[contains(@class, "search-result-link")]'
-            )
-
-            # Extract post metadata from the html elements
-            for result in search_results:
-                post = self._extract_post_metadata(result)
-                post['subreddit'] = subreddit
-                post['search_query'] = search_query
-                self.post_data.append(post)
-        
             # Get the ID of the oldest post to use in the next search
             after_post_id = search_results[-1].get_attribute("data-fullname")
             
@@ -226,6 +251,15 @@ class RedditScraper:
             '/div[contains(@class, "nestedlisting")]'
             '/div[contains(@class, "comment")]'
         )
+
+        no_comment_xpath = comments_xpath[0] + '/div[contains(@class, "panestack-title")]'
+        try:
+            no_comment_div = self.driver.find_element(By.XPATH, no_comment_xpath)
+            if no_comment_div.text == "no comments (yet)":
+                return []
+        except:
+            pass
+
         self._wait_for_element((By.XPATH, comments_xpath))
         comments_divs = self.driver.find_elements(By.XPATH, comments_xpath)
         return self._extract_comments(comments_divs)
@@ -235,6 +269,7 @@ class RedditScraper:
         self._wait()
         
         try:
+            self._logger.info(f"Loading post URL: {post['url']}")
             self.driver.get(post["url"])
         except Exception as e:
             self._logger.error(f"Error loading post URL {post['url']}: {e}")
@@ -253,11 +288,15 @@ class RedditScraper:
         """Get posts without text content."""
         return [post for post in self.post_data if post.get("text") is None]
     
-    def scrape_all_post_contents(self):
+    def scrape_all_post_contents(self, retry: int = 5):
         """Scrape the content of posts in self.post_data."""
-        for post in self.get_posts_without_content():
-            self.scrape_post_content(post)
-        return len(self.get_posts_without_content())
+        for _ in range(retry):
+            for post in self.get_posts_without_content():
+                self.scrape_post_content(post)
+            num_posts_without_content = len(self.get_posts_without_content())
+            if num_posts_without_content == 0:
+                return len(self.get_posts_without_content())
+        raise f"{self.get_posts_without_content()} are still missing after {retry} tries."
 
     def to_dataframe(self):
         """Convert scraped data to a pandas DataFrame."""
@@ -270,7 +309,7 @@ def scrape_reddit(logger:logging.Logger, *args, **kwargs):
     """
     scraper = RedditScraper(logger)
     scraper.start_driver()
-    scraper.get_post_list(*args, **kwargs)
+    scraper.get_multipage_post_list(*args, **kwargs)
     scraper.scrape_all_post_contents()
     scraper.quit()
     df = scraper.to_dataframe()

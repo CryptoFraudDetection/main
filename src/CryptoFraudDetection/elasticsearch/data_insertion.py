@@ -37,7 +37,7 @@ def insert_dataframe(
             {"_index": index, "_source": record} for record in df.to_dict(orient="records")
         ]
     try:
-        success_fail = bulk(client=es, actions=data, raise_on_error=False)
+        response = bulk(client=es, actions=data, raise_on_error=False)
     except BulkIndexError as e:
         logger.info(f"Skipped some documents:\n{e}")
-    return success_fail
+    return response
