@@ -62,6 +62,8 @@ def test_get_post_list():
     scraper.quit()
     
     
+    
 if __name__ == '__main__':
-    test_get_post_list()
+    test_scrape_post_content()
+    # test_get_post_list()
     
