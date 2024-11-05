@@ -39,6 +39,7 @@ class RedditScraper:
 
     def start_driver(self):
         """Start the WebDriver session if not already started."""
+        # TODO: headless does not work, why?
         if self.driver is None:
             options = webdriver.FirefoxOptions()
             options.headless = self.headless
@@ -122,7 +123,8 @@ class RedditScraper:
         subreddit: str,
         search_query: str,
         limit: int = 10000,
-        oldest_post_id: str = None,
+        start_date: str = None,  # yyymmdd
+        after_post_id: str = None,
         max_num_posts_per_search=100,
     ) -> None:
         """Search for posts in a specific subreddit."""
@@ -141,8 +143,8 @@ class RedditScraper:
             )
             # TODO: start from date x
             # TODO: end at date x
-            if oldest_post_id:
-                url += f"&after={oldest_post_id}"
+            if after_post_id:
+                url += f"&after={after_post_id}"
             # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
             self._wait()
             self._logger.info(f"Loading URL: {url}")
@@ -166,7 +168,15 @@ class RedditScraper:
                 self.post_data.append(post)
         
             # Get the ID of the oldest post to use in the next search
-            oldest_post_id = search_results[-1].get_attribute("data-fullname")
+            after_post_id = search_results[-1].get_attribute("data-fullname")
+            
+            # Break if oldest post is older than start_date
+            if start_date:
+                oldest_post_date = pd.to_datetime(self.post_data[-1]['date']).tz_localize(None)
+                if isinstance(start_date, str):
+                    start_date = pd.to_datetime(start_date).tz_localize(None)
+                if oldest_post_date < start_date:
+                    break
 
         return self.post_data
 
