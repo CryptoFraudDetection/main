@@ -37,3 +37,11 @@ class APIKeyNotSetException(Exception):
     ):
         self.message = message
         super().__init__(self.message)
+
+class AuthenticationError(Exception):
+    """
+    Exception raised when authentication details are missing for scraping Twitter.
+    """
+    def __init__(self, message="Authentication details are required (either cookies or username/password)."):
+        self.message = message
+        super().__init__(self.message)

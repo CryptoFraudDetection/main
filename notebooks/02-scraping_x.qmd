@@ -1,0 +1,40 @@
+---
+jupyter: python3
+---
+
+```{python}
+#| collapsed: true
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+import CryptoFraudDetection.scraper.twitter as twitter_scrapper
+from CryptoFraudDetection.utils.logger import Logger
+import time
+
+import json, os
+import csv
+import random
+```
+
+```{python}
+x_scrapper = twitter_scrapper.TwitterScraper(os.getenv("TWITTER_USERNAME"), os.getenv("TWITTER_PASSWORD"), Logger("logger"))
+```
+
+```{python}
+x_scrapper.login_save_cookies()
+```
+
+```{python}
+df_test = x_scrapper.scrape_with_cookies()
+```
+
+```{python}
+df_test['Tweet'].values
+```
+
+```{python}
+df_test
+```
+
