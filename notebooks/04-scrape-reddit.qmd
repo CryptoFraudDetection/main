@@ -19,11 +19,39 @@ MODE=ScraperNotebookMode.WRITE
 ```
 
 ```{python}
-data = scrape_reddit(logger, 'r/CryptoCurrency','Terra Luna',limit=6,max_num_posts_per_search=2)
+subreddits = ['r/CryptoCurrency', 'r/CryptoMoonShots', 'r/CryptoMarkets']
+
+scam_coins = [
+    'FTX Token', 'FTT',
+    'Terra Luna Classic', 'Terra Luna', 'LUNC',
+    'Squid-Game-Coin', 'SQUID',
+    'STA',
+    'BeerCoin', 'BEER'
+    'BitForex', 'BF'
+]
+non_scam_coins = [
+    'Bitcoin', 'BTC',
+    'Ethereum', 'ETH',
+    'Cosmos', 'ATOM',
+    'Avalanche', 'AVAX'
+]
+
 ```
 
 ```{python}
-insert_dataframe(logger, 'reddit',data)
+for sub in subreddits:
+    for coin in scam_coins:
+
+        data = scrape_reddit(
+            logger,
+            sub,
+            coin,
+            limit=40,
+            start_date=None,
+            after_post_id='t3_1bpxn91',
+            retry=5)
+            
+        insert_dataframe(logger, 'reddit',data)
 ```
 
 ```{python}
