@@ -3,7 +3,7 @@ This module contains the tests for the scraper.comparitech module.
 """
 
 import CryptoFraudDetection.utils.logger as logger
-from CryptoFraudDetection.scraper.reddit import RedditScraper
+from CryptoFraudDetection.scraper.reddit import RedditScraper, scrape_reddit
 from CryptoFraudDetection.utils.enums import LoggerMode
 
 logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
@@ -61,22 +61,16 @@ def test_get_post_list():
     assert len(posts) > 0
     scraper.quit()
     
-def test_reddit_scraper():
+def test_scrape_reddit():
     """
     Test the RedditScraper class
     """
-    scraper = RedditScraper(logger_)
-    scraper.start_driver()
-    scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
-    scraper.scrape_all_post_contents()
-    scraper.quit()
-    df = scraper.to_dataframe()
+    df = scrape_reddit(logger_,'r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
     assert df is not None
     assert len(df) > 0
-    print(df)
     
     
 if __name__ == '__main__':
     # test_scrape_post_content()
     #test_get_post_list()
-    test_reddit_scraper()
+    test_scrape_reddit()

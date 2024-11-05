@@ -249,3 +249,16 @@ class RedditScraper:
     def to_dataframe(self):
         """Convert scraped data to a pandas DataFrame."""
         return pd.DataFrame(self.post_data)
+
+
+def scrape_reddit(logger:logging.Logger,subreddit:str,query:str,limit:int=3, max_num_posts_per_search:int=2):
+    """
+    scrape Reddit
+    """
+    scraper = RedditScraper(logger)
+    scraper.start_driver()
+    scraper.get_post_list(subreddit, query, limit=limit, max_num_posts_per_search=max_num_posts_per_search)
+    scraper.scrape_all_post_contents()
+    scraper.quit()
+    df = scraper.to_dataframe()
+    return df
