@@ -56,14 +56,27 @@ def test_get_post_list():
     """
     scraper = RedditScraper(logger_)
     scraper.start_driver()
-    posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=12, max_num_posts_per_search=5)
+    posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
     assert isinstance(posts, list)
     assert len(posts) > 0
     scraper.quit()
     
+def test_reddit_scraper():
+    """
+    Test the RedditScraper class
+    """
+    scraper = RedditScraper(logger_)
+    scraper.start_driver()
+    scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=3, max_num_posts_per_search=2)
+    scraper.scrape_all_post_contents()
+    scraper.quit()
+    df = scraper.to_dataframe()
+    assert df is not None
+    assert len(df) > 0
+    print(df)
     
     
 if __name__ == '__main__':
-    test_scrape_post_content()
-    # test_get_post_list()
-    
+    # test_scrape_post_content()
+    #test_get_post_list()
+    test_reddit_scraper()
