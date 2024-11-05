@@ -5,7 +5,6 @@ This module contains the tests for the scraper.comparitech module.
 import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.scraper.reddit import RedditScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
-import json
 
 logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
 
@@ -14,7 +13,8 @@ def test_initialization():
     """
     Test the initialization of the RedditScraper class
     """
-    scraper = RedditScraper(logger_, '', '', '')
+    scraper = RedditScraper(logger_, headless=False)
+    scraper.start_driver()
     scraper.quit()
 
 
@@ -22,64 +22,45 @@ def test__extract_all_comments():
     """
     Test the _extract_comments method of the RedditScraper class
     """
-    scraper = RedditScraper(logger_, '', '', '')
+    scraper = RedditScraper(logger_)
+    scraper.start_driver()
     url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
-    scraper.scrape_post_content(url)
+    scraper.scrape_post_content({'url': url})
     comments = scraper._extract_all_comments()
-    with open('comments.json', 'w') as f:
-        json.dump(comments, f)
-
+    assert isinstance(comments, list)
+    assert len(comments) > 0
+    for comment in comments:
+        assert isinstance(comment, dict)
+        assert comment.get('text', None) not in [None, '']
+        assert comment.get('author', None) not in [None, '']
+        if comment.get('children', None) is not None:
+            assert isinstance(comment['children'], list)
+    scraper.quit()
 
 def test_scrape_post_content():
     """
     Test the scrape_post_content method of the RedditScraper class
     """
-    scraper = RedditScraper(logger_, '', '', '')
+    scraper = RedditScraper(logger_)
+    scraper.start_driver()
     url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
-    post = scraper.scrape_post_content(url)
+    post = scraper.scrape_post_content({'url': url})
 
     assert post.get('text', None) not in [None, '']
-    #assert isinstance(post.get('score', None), int)
-    
-    # # Check if the first comment has the required keys
-    # for key in ['id', 'author', 'text', 'score', 'date', 'children']:
-    #     assert post['children'][0].get(key, None)
-    # # Check if the first child of the first comment has the required keys
-    # for key in ['id', 'author', 'text', 'score', 'date', 'children']:
-    #     assert post['children'][0]['children'][0].get(key, None)
+    assert post.get('children', None) is not None
     scraper.quit()
-
-def test_scrape_post_id():
-    """
-    Test the scrape_post_id method of the RedditScraper class
-    """
-    scraper = RedditScraper(logger_, '', '', '')
-    url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
-    id = scraper.scrape_post_content(url)
     
-    assert id.get('id', None) not in [None,'']
-
-def test_scrape_post_author():
+def test_get_post_list():
     """
-    Test the scrape_post_author method of the RedditScraper class
+    Test the get_post_list method of the RedditScraper class
     """
-    scraper = RedditScraper(logger_, '', '', '')
-    url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
-    author = scraper.scrape_post_content(url)
-    
-    assert author.get('author', None) not in [None,'']
-
-def test_scrape_post_date():
-    """
-    Test the scrape_post_date method of the RedditScraper class
-    """
-    scraper = RedditScraper(logger_, '', '', '')
-    url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
-    date = scraper.scrape_post_content(url)
-    
-    assert date.get('date', None) not in [None,'']
+    scraper = RedditScraper(logger_)
+    scraper.start_driver()
+    posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=12, max_num_posts_per_search=5)
+    assert isinstance(posts, list)
+    assert len(posts) > 0
     
     
 if __name__ == '__main__':
-    test__extract_all_comments()
+    test_get_post_list()
     
