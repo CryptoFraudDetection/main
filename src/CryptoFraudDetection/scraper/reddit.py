@@ -261,13 +261,13 @@ class RedditScraper:
         return pd.DataFrame(self.post_data)
 
 
-def scrape_reddit(logger:logging.Logger,subreddit:str,query:str,limit:int=3, max_num_posts_per_search:int=2):
+def scrape_reddit(logger:logging.Logger, *args, **kwargs):
     """
     scrape Reddit
     """
     scraper = RedditScraper(logger)
     scraper.start_driver()
-    scraper.get_post_list(subreddit, query, limit=limit, max_num_posts_per_search=max_num_posts_per_search)
+    scraper.get_post_list(*args, **kwargs)
     scraper.scrape_all_post_contents()
     scraper.quit()
     df = scraper.to_dataframe()

@@ -92,5 +92,5 @@ def test_scrape_reddit():
 if __name__ == '__main__':
     # test_scrape_post_content()
     # test_get_post_list()
-    # test_reddit_scraper()
-    test_get_post_list_with_start_date()
+    test_scrape_reddit()
+    # test_get_post_list_with_start_date()
