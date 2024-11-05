@@ -59,6 +59,7 @@ def test_get_post_list():
     posts = scraper.get_post_list('r/CryptoCurrency', 'Terra Luna', limit=12, max_num_posts_per_search=5)
     assert isinstance(posts, list)
     assert len(posts) > 0
+    scraper.quit()
     
     
 if __name__ == '__main__':
