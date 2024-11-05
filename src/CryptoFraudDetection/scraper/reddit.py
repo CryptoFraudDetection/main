@@ -33,18 +33,21 @@ class RedditScraper:
         self._base_url: str = base_url
         self._wait_range: tuple[int, int] = wait_range
         self._cookies_file: str = cookies_file
-        self.post_data: list[dict] = []
+        self.headless: bool = headless
+        
         self.driver = None
-        self.headless = headless
+        self.post_data: list[dict] = []
 
     def start_driver(self):
         """Start the WebDriver session if not already started."""
         # TODO: headless does not work, why?
         if self.driver is None:
             options = webdriver.FirefoxOptions()
-            options.headless = self.headless
+            if self.headless:
+                options.add_argument("--headless")
             self.driver = webdriver.Firefox(options=options)
             self._logger.info("WebDriver session started.")
+
 
     def quit(self):
         """Quit the WebDriver session if it's running."""
