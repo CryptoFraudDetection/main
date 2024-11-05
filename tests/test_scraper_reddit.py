@@ -61,6 +61,8 @@ def test_get_post_list():
     assert len(posts) > 0
     
     
+    
 if __name__ == '__main__':
-    test_get_post_list()
+    test_scrape_post_content()
+    # test_get_post_list()
     

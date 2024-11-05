@@ -142,12 +142,13 @@ class RedditScraper:
             if oldest_post_id:
                 url += f"&after={oldest_post_id}"
             # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
+            self._wait()
             self._logger.info(f"Loading URL: {url}")
             self.driver.get(url)
 
             # Wait for search results to load
             self._wait_for_element(
-                (By.XPATH, '//div[contains(@class, "search-result-link")]'), timeout=10
+                (By.XPATH, '//div[contains(@class, "search-result-link")]')
             )
 
             # Extract list of posts
@@ -237,7 +238,7 @@ class RedditScraper:
     
     def scrape_all_post_contents(self):
         """Scrape the content of posts in self.post_data."""
-        for post in self.get_posts_without_text:
+        for post in self.get_posts_without_text():
             self.scrape_post_content(post)
         return len(self.get_posts_without_text())
 
