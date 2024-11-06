@@ -462,7 +462,7 @@ class TwitterScraper:
             "Bookmarks": [row[7] for row in tweet_data],
             "id": [
                 hashlib.md5(
-                    f"{row[0]}_{row[1]}_{row[2]}_{row[3]}_{row[4]}_{row[5]}_{row[6]}_{row[7]}".encode()
+                    f"{row[0]}_{row[1]}_{row[2]}".encode()
                 ).hexdigest()
                 for row in tweet_data
             ],
