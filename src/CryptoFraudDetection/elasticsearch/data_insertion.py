@@ -56,18 +56,6 @@ def insert_dict(
     Returns:
     - Tuple[int, int | List[Dict[str, Any]]]: Elasticsearch bulk insert response.
     """
-    if any('id' in record for record in data_dict):
-        data = [
-            {"_index": index, "_id": record['id'], "_op_type": 'create', "_source": record} for record in data_dict
-        ]
-    else:
-        data = [
-            {"_index": index, "_source": record} for record in data_dict
-        ]
-    try:
-        success_fail = bulk(client=es, actions=data, raise_on_error=False)
-    except BulkIndexError as e:
-        logger.info(f"Skipped some documents:\n{e}")
-        success_fail = (0, 0)
-    return success_fail
+    df = pd.DataFrame(data_dict)
+    return insert_dataframe(logger, index, df)
 

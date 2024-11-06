@@ -11,6 +11,7 @@ import json
 import re
 import random
 from typing import List, Tuple
+import hashlib
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -459,6 +460,12 @@ class TwitterScraper:
             "Comments": [row[5] for row in tweet_data],
             "Reposts": [row[6] for row in tweet_data],
             "Bookmarks": [row[7] for row in tweet_data],
+            "id": [
+                hashlib.md5(
+                    f"{row[0]}_{row[1]}_{row[2]}_{row[3]}_{row[4]}_{row[5]}_{row[6]}_{row[7]}".encode()
+                ).hexdigest()
+                for row in tweet_data
+            ],
         }
 
     def get_tweets(
