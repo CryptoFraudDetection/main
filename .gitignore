@@ -169,3 +169,6 @@ wandb
 
 # cookies
 data/raw/cookies/*.json
+
+# PyCharm ignore
+.idea/
