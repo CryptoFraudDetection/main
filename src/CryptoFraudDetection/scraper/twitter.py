@@ -345,13 +345,15 @@ class TwitterScraper:
             self.logger.debug("Close button clicked successfully.")
 
         except (NoSuchElementException, TimeoutException) as e:
-            self.logger.handle_exception(NoSuchElementException,
-                f"Close button not found or not clickable within the timeout period. {e}"
+            self.logger.handle_exception(
+                NoSuchElementException,
+                f"Close button not found or not clickable within the timeout period. {e}",
             )
 
         except JavascriptException as e:
-            self.logger.handle_exception(JavascriptException,
-                f"WebDriverException encountered when trying to click the close button. {e}"
+            self.logger.handle_exception(
+                JavascriptException,
+                f"WebDriverException encountered when trying to click the close button. {e}",
             )
 
     def perform_search(
@@ -383,13 +385,19 @@ class TwitterScraper:
                 probability_interval_2=0.05,
             )
         except NoSuchElementException:
-            self.logger.handle_exception(NoSuchElementException, "Search bar not found on the page.")
+            self.logger.handle_exception(
+                NoSuchElementException, "Search bar not found on the page."
+            )
         except TimeoutException:
-            self.logger.handle_exception(TimeoutException,
-                "Search bar did not become clickable within the timeout period."
+            self.logger.handle_exception(
+                TimeoutException,
+                "Search bar did not become clickable within the timeout period.",
             )
         except ElementNotInteractableException:
-            self.logger.handle_exception(ElementNotInteractableException, "Search bar was found but could not be interacted with.")
+            self.logger.handle_exception(
+                ElementNotInteractableException,
+                "Search bar was found but could not be interacted with.",
+            )
 
     def scrape_tweets(
         self,
@@ -412,23 +420,37 @@ class TwitterScraper:
         tweet_data = []
 
         self._check_authentication()
-        
+
         # Scrape tweets until the specified count is reached
         while tweets_scraped < tweet_count:
             tweets = self.get_tweets(driver)
             for tweet in tweets:
                 try:
                     # Extract tweet details
-                    username, content, timestamp, likes, impressions, comments, reposts, bookmarks = (
-                        self.extract_tweet_details(tweet)
-                    )
+                    (
+                        username,
+                        content,
+                        timestamp,
+                        likes,
+                        impressions,
+                        comments,
+                        reposts,
+                        bookmarks,
+                    ) = self.extract_tweet_details(tweet)
                     tweet_data.append(
-                        [username, content, timestamp, likes, impressions, comments, reposts, bookmarks]
+                        [
+                            username,
+                            content,
+                            timestamp,
+                            likes,
+                            impressions,
+                            comments,
+                            reposts,
+                            bookmarks,
+                        ]
                     )
                     tweets_scraped += 1
-                    self.logger.info(
-                        f"Scraped tweet {tweets_scraped}/{tweet_count}"
-                    )
+                    self.logger.info(f"Scraped tweet {tweets_scraped}/{tweet_count}")
 
                 except (NoSuchElementException, TimeoutException) as e:
                     self.logger.warning(
@@ -438,7 +460,7 @@ class TwitterScraper:
                     self.logger.warning(
                         f"Attribute missing in tweet details extraction: {e}"
                     )
-            
+
             self.random_sleep(
                 interval_1=(3, 7),
                 probability_interval_1=0.85,
@@ -452,9 +474,7 @@ class TwitterScraper:
             )
 
         self.logger.debug("Tweets scraped into dictionary.")
-        
-        
-        
+
         # Return the scraped tweet data as a dictionary
         return self.create_tweet_data_dict(tweet_data)
 
@@ -479,9 +499,13 @@ class TwitterScraper:
                 )
             )
         except TimeoutException as e:
-            self.logger.handle_exception(TimeoutException, f"Timed out while waiting for tweet elements: {e}")
+            self.logger.handle_exception(
+                TimeoutException, f"Timed out while waiting for tweet elements: {e}"
+            )
         except NoSuchElementException as e:
-            self.logger.handle_exception(NoSuchElementException, f"No tweet elements found on the page: {e}")
+            self.logger.handle_exception(
+                NoSuchElementException, f"No tweet elements found on the page: {e}"
+            )
 
         return []
 
@@ -536,40 +560,62 @@ class TwitterScraper:
 
         # Extract likes
         try:
-            likes_element = tweet.find_element(By.XPATH, ".//button[@data-testid='like']//span")
+            likes_element = tweet.find_element(
+                By.XPATH, ".//button[@data-testid='like']//span"
+            )
             likes = likes_element.text or "0"
         except NoSuchElementException:
             self.logger.debug("Likes element not found; defaulting to 0.")
 
         # Extract impressions
         try:
-            impressions_element = tweet.find_element(By.XPATH, ".//a[@aria-label][contains(@aria-label, 'views')]//span")
+            impressions_element = tweet.find_element(
+                By.XPATH, ".//a[@aria-label][contains(@aria-label, 'views')]//span"
+            )
             impressions = impressions_element.text or "N/A"
         except NoSuchElementException:
             self.logger.debug("Impressions element not found; defaulting to N/A.")
 
         # Check for missing values and update from aria-label if necessary
         try:
-            aria_label = tweet.find_element(By.XPATH, ".//div[@role='group']").get_attribute("aria-label")
-            
-            if comments == "0":  # Update comments if default
-                comments = re.search(r"(\d+(?:,\d+)*) replies", aria_label).group(1).replace(",", "")
-            if reposts == "0":  # Update reposts if default
-                reposts = re.search(r"(\d+(?:,\d+)*) reposts", aria_label).group(1).replace(",", "")
-            if likes == "0":  # Update likes if default
-                likes = re.search(r"(\d+(?:,\d+)*) likes", aria_label).group(1).replace(",", "")
-            if bookmarks == "0":  # Update bookmarks if default
-                bookmarks = re.search(r"(\d+(?:,\d+)*) bookmarks", aria_label).group(1).replace(",", "")
-            if impressions == "N/A":  # Update impressions if default
-                impressions = re.search(r"(\d+(?:,\d+)*) views", aria_label).group(1).replace(",", "")
-        
+            if aria_label := tweet.find_element(
+                By.XPATH, ".//div[@role='group']"
+            ).get_attribute("aria-label"):
+                if comments == "0":  # Update comments if default
+                    if match := re.search(r"(\d+(?:,\d+)*) replies", aria_label):
+                        comments = match[1].replace(",", "")
+                if reposts == "0":  # Update reposts if default
+                    if match := re.search(r"(\d+(?:,\d+)*) reposts", aria_label):
+                        reposts = match[1].replace(",", "")
+                if likes == "0":  # Update likes if default
+                    if match := re.search(r"(\d+(?:,\d+)*) likes", aria_label):
+                        likes = match[1].replace(",", "")
+                if bookmarks == "0":  # Update bookmarks if default
+                    if match := re.search(r"(\d+(?:,\d+)*) bookmarks", aria_label):
+                        bookmarks = match[1].replace(",", "")
+                if impressions == "N/A":  # Update impressions if default
+                    if match := re.search(r"(\d+(?:,\d+)*) views", aria_label):
+                        impressions = match[1].replace(",", "")
+            else:
+                self.logger.debug("Failed to extract aria-label from tweet.")
+
         except (NoSuchElementException, AttributeError):
-            self.logger.debug("Failed to parse some values from aria-label; using defaults where necessary.")
+            self.logger.debug(
+                "Failed to parse some values from aria-label; using defaults where necessary."
+            )
 
-        return username, content, timestamp, likes, impressions, comments, reposts, bookmarks
+        return (
+            username,
+            content,
+            timestamp,
+            likes,
+            impressions,
+            comments,
+            reposts,
+            bookmarks,
+        )
 
-
-    def parse_count(self, value: str) -> int:
+    def parse_count(self, value: str) -> float:
         """
         Convert count strings like '1k' or '2.5k' to integer values, rounding if necessary.
 
@@ -580,20 +626,21 @@ class TwitterScraper:
             int: The integer representation of the count.
         """
         value = value.lower()  # Handle both uppercase and lowercase abbreviations
-        if 'k' in value:
-            return float(value.replace('k', '')) * 1000
-        elif 'm' in value:
-            return float(value.replace('m', '')) * 1_000_000
+        if "k" in value:
+            return float(value.replace("k", "")) * 1000
+        elif "m" in value:
+            return float(value.replace("m", "")) * 1_000_000
         else:
             return float(value)
-        
+
     def create_tweet_data_dict(self, tweet_data):
         """
         Create a dictionary for tweet data with an 'id' based on immutable fields only,
         and converts count fields to integers.
 
         Args:
-            tweet_data (List[List[str]]): List of tweet details, where each tweet's details are in a list.
+            tweet_data (List[List[str]]): List of tweet details, where each tweet's
+                details are in a list.
 
         Returns:
             dict: Dictionary containing tweet data with an 'id' based on immutable fields.
@@ -608,7 +655,7 @@ class TwitterScraper:
                 self.parse_count(row[4]),
                 self.parse_count(row[5]),
                 self.parse_count(row[6]),
-                self.parse_count(row[7])
+                self.parse_count(row[7]),
             ]
             for row in tweet_data
         ]
@@ -624,66 +671,7 @@ class TwitterScraper:
             "Reposts": [row[6] for row in processed_data],
             "Bookmarks": [row[7] for row in processed_data],
             "id": [
-                hashlib.md5(
-                    f"{row[0]}_{row[1]}_{row[2]}".encode()
-                ).hexdigest()
+                hashlib.md5(f"{row[0]}_{row[1]}_{row[2]}".encode()).hexdigest()
                 for row in processed_data
             ],
         }
-        
-
-def scrape_in_blocks(
-    scraper: TwitterScraper,
-    search_query: str,
-    start_date: datetime,
-    end_date: datetime,
-    block_count: int,
-    total_tweet_count: int,
-    db_index: str,
-    logger: Logger
-) -> None:
-    """
-    Scrapes tweets in evenly distributed blocks between start and end dates,
-    then uploads each block to the database.
-
-    Args:
-        scraper (TwitterScraper): Instance of TwitterScraper to use for scraping.
-        search_query (str): The search query for tweets.
-        start_date (datetime): The start date for scraping.
-        end_date (datetime): The end date for scraping.
-        block_count (int): The number of blocks to divide the scraping period into.
-        total_tweet_count (int): The total number of tweets to scrape.
-        db_index (str): The Elasticsearch index to insert the data into.
-        logger (Logger): Logger for logging messages.
-    """
-    # Wrap the search query in quotes to ensure it appears in the tweets
-    search_query = f'"{search_query}"'
-
-    # Calculate block duration and tweets per block
-    block_duration = (end_date - start_date) / block_count
-    tweets_per_block = [
-        math.ceil(total_tweet_count * (i + 1) / (block_count * (block_count + 1) / 2))
-        for i in range(block_count)
-    ]
-
-    # Iterate over each block and scrape tweets
-    for i in range(block_count):
-        block_start_date = start_date + i * block_duration
-        block_end_date = block_start_date + block_duration
-
-        # Log the block information
-        logger.info(
-            f"Scraping block {i + 1}/{block_count}: {tweets_per_block[i]} tweets "
-            f"from {block_start_date} to {block_end_date}."
-        )
-
-        # Construct Twitter date query format (YYYY-MM-DD)
-        date_query = f"{search_query} since:{block_start_date.strftime('%Y-%m-%d')} until:{block_end_date.strftime('%Y-%m-%d')}"
-        
-        # Scrape tweets with cookies and save them to database
-        tweets_data = scraper.scrape_with_cookies(tweet_count=tweets_per_block[i], search_query=date_query, headless=True)
-        insert_dict(logger, db_index, tweets_data)
-        logger.info(f"Block {i + 1}/{block_count} completed and data inserted into the database.")
-
-        # Sleep briefly to avoid rate-limiting
-        time.sleep(random.uniform(3, 6))
