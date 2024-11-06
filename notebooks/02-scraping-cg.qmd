@@ -4,8 +4,10 @@ jupyter: python3
 
 ```{python}
 import os
+from datetime import datetime
 
 from CryptoFraudDetection.scraper.twitter import TwitterScraper
+from CryptoFraudDetection.scraper.twitter import scrape_in_blocks
 from CryptoFraudDetection.scraper.google_results import GoogleResultsScraper
 from CryptoFraudDetection.scraper.comparitech import ComparitechScraper
 from CryptoFraudDetection.utils.logger import Logger
@@ -37,6 +39,22 @@ dict_test = twitter_scraper.scrape_with_cookies(tweet_count=3, headless=False)
 ```
 
 ```{python}
-insert_dict(logger_, 'x', dict_test)
+
+
+# Konvertiere die Datumsstrings in datetime-Objekte
+start_date = datetime.strptime('2016-06-01', '%Y-%m-%d')
+end_date = datetime.strptime('2024-11-01', '%Y-%m-%d')
+```
+
+```{python}
+scrape_in_blocks(scraper=twitter_scraper, 
+                 search_query='Bitcoin', 
+                 start_date=start_date, 
+                 end_date=end_date, 
+                 block_count=17, 
+                 total_tweet_count=5300,
+                 db_index='x',
+                 logger=logger_,
+                 headless=False)
 ```
 

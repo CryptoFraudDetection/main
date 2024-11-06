@@ -9,7 +9,7 @@ import os
 import time
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import math
 from typing import List, Tuple
@@ -380,7 +380,7 @@ class TwitterScraper:
             search_bar.send_keys(Keys.RETURN)
             self.logger.info(f"Searched for: {search_query}")
             self.random_sleep(
-                interval_1=(6, 11),
+                interval_1=(4, 10),
                 probability_interval_1=0.95,
                 probability_interval_2=0.05,
             )
@@ -462,13 +462,14 @@ class TwitterScraper:
                     )
 
             self.random_sleep(
-                interval_1=(3, 7),
-                probability_interval_1=0.85,
+                interval_1=(2, 6),
+                probability_interval_1=0.87,
                 probability_interval_2=0.1,
             )
 
             # Scroll to the bottom of the page to load more tweets
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            for _ in range(3):
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             self.random_sleep(
                 interval_1=(2, 6), probability_interval_1=1, probability_interval_2=0.0
             )
@@ -491,22 +492,32 @@ class TwitterScraper:
         Returns:
             List[WebElement]: List of tweet elements.
         """
-        # Wait for the tweets to load and return the list of tweet elements
-        try:
-            return WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located(
-                    (By.XPATH, "//article[@data-testid='tweet']")
-                )
-            )
-        except TimeoutException as e:
-            self.logger.handle_exception(
-                TimeoutException, f"Timed out while waiting for tweet elements: {e}"
-            )
-        except NoSuchElementException as e:
-            self.logger.handle_exception(
-                NoSuchElementException, f"No tweet elements found on the page: {e}"
-            )
+        attempts = 0
+        max_attempts = 3  # Maximum number of retry attempts
+        
 
+        while attempts < max_attempts:
+            try:
+                # Attempt to locate tweet elements
+                return WebDriverWait(driver, 10).until(
+                    EC.presence_of_all_elements_located(
+                        (By.XPATH, "//article[@data-testid='tweet']")
+                    )
+                )
+            except TimeoutException as e:
+                attempts += 1
+                self.logger.warning(
+                    f"Attempt {attempts} of {max_attempts} failed: Timed out while waiting for tweet elements. Retrying..."
+                )
+                self.random_sleep(
+                    interval_1=(2, 6),
+                    probability_interval_1=1
+                )
+
+        # After max_attempts retries, raise the TimeoutException
+        self.logger.handle_exception(
+            TimeoutException, "Max retries reached. Timed out while waiting for tweet elements."
+        )
         return []
 
     def extract_tweet_details(
@@ -529,7 +540,7 @@ class TwitterScraper:
         content = ""
         timestamp = "N/A"
         likes = "0"
-        impressions = "N/A"
+        impressions = "0"
         comments = "0"
         reposts = "0"
         bookmarks = "0"
@@ -572,9 +583,9 @@ class TwitterScraper:
             impressions_element = tweet.find_element(
                 By.XPATH, ".//a[@aria-label][contains(@aria-label, 'views')]//span"
             )
-            impressions = impressions_element.text or "N/A"
+            impressions = impressions_element.text or "0"
         except NoSuchElementException:
-            self.logger.debug("Impressions element not found; defaulting to N/A.")
+            self.logger.debug("Impressions element not found; defaulting to 0.")
 
         # Check for missing values and update from aria-label if necessary
         try:
@@ -593,7 +604,7 @@ class TwitterScraper:
                 if bookmarks == "0":  # Update bookmarks if default
                     if match := re.search(r"(\d+(?:,\d+)*) bookmarks", aria_label):
                         bookmarks = match[1].replace(",", "")
-                if impressions == "N/A":  # Update impressions if default
+                if impressions == "0":  # Update impressions if default
                     if match := re.search(r"(\d+(?:,\d+)*) views", aria_label):
                         impressions = match[1].replace(",", "")
             else:
@@ -676,6 +687,7 @@ class TwitterScraper:
             ],
         }
 
+
 def scrape_in_blocks(
     scraper: TwitterScraper,
     search_query: str,
@@ -684,7 +696,8 @@ def scrape_in_blocks(
     block_count: int,
     total_tweet_count: int,
     db_index: str,
-    logger: Logger
+    logger: Logger,
+    headless: bool = True,
 ) -> None:
     """
     Scrapes tweets in evenly distributed blocks between start and end dates,
@@ -700,23 +713,35 @@ def scrape_in_blocks(
         db_index (str): The Elasticsearch index to insert the data into.
         logger (Logger): Logger for logging messages.
     """
-
+    # Wrap the search query in quotes to ensure it appears in the tweets
     search_query = f'"{search_query}"'
 
-    # Calculate block duration and tweets per block
+    # Calculate approximate block duration
     block_duration = (end_date - start_date) / block_count
+    
+    # Adjusted calculation for tweets per block with a flatter increase
     tweets_per_block = [
-        math.ceil(total_tweet_count * (i + 1) / (block_count * (block_count + 1) / 2))
+        math.ceil(total_tweet_count * (i + 1) ** 0.8 / (block_count ** 1.8)) 
         for i in range(block_count)
     ]
+
+    # Ensure the total still sums up to the target count
+    difference = total_tweet_count - sum(tweets_per_block)
+    for i in range(abs(difference)):
+        tweets_per_block[i % block_count] += int(math.copysign(1, difference))
 
     # Iterate over each block and scrape tweets
     for i in range(block_count):
         block_start_date = start_date + i * block_duration
-        block_end_date = block_start_date + block_duration
+        
+        # Ensure the last block ends on or just before the `end_date`
+        if i == block_count - 1:
+            block_end_date = end_date
+        else:
+            block_end_date = block_start_date + block_duration
 
         # Log the block information
-        logger.info(
+        logger.debug(
             f"Scraping block {i + 1}/{block_count}: {tweets_per_block[i]} tweets "
             f"from {block_start_date} to {block_end_date}."
         )
@@ -725,8 +750,13 @@ def scrape_in_blocks(
         date_query = f"{search_query} since:{block_start_date.strftime('%Y-%m-%d')} until:{block_end_date.strftime('%Y-%m-%d')}"
         
         # Scrape tweets with cookies and save them to database
-        tweets_data = scraper.scrape_with_cookies(tweet_count=tweets_per_block[i], search_query=date_query, headless=True)
+        tweets_data = scraper.scrape_with_cookies(tweet_count=tweets_per_block[i], search_query=date_query, headless=headless)
         insert_dict(logger, db_index, tweets_data)
-        logger.info(f"Block {i + 1}/{block_count} completed and data inserted into the database.")
+        logger.debug(f"Block {i + 1}/{block_count} completed and data inserted into the database.")
 
-        time.sleep(random.uniform(1, 2))
+        time.sleep(random.uniform(3, 6))
+
+    final_date_query = f"{search_query} since:{end_date.strftime('%Y-%m-%d')} until:{(end_date + timedelta(days=1)).strftime('%Y-%m-%d')}"
+    additional_tweets_data = scraper.scrape_with_cookies(tweet_count=20, search_query=final_date_query, headless=True)
+    insert_dict(logger, db_index, additional_tweets_data)
+
