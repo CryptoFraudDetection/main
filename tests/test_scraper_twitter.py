@@ -2,11 +2,13 @@
 This module contains the tests for the scraper.twitter module.
 """
 
-import CryptoFraudDetection.utils.logger as logger
+import pytest
+
+from CryptoFraudDetection.utils.logger import Logger
 from CryptoFraudDetection.scraper.twitter import TwitterScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
 
-logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="/logs")
+logger_ = Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="/logs")
 
 
 def test_initialization():
@@ -34,6 +36,7 @@ def test_initialization():
     assert scraper_without_credentials.cookies_file_path == ""
 
 
+@pytest.mark.xfail(reason="Often fails due to being detected as a bot by Twitter")
 def test_scrape_with_cookies():
     """
     Test the scrape_with_cookies method of the TwitterScraper class
@@ -61,4 +64,3 @@ def test_scrape_with_cookies():
     assert "Comments" in tweets_data
     assert "Reposts" in tweets_data
     assert "Bookmarks" in tweets_data
-
