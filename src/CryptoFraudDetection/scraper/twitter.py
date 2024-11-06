@@ -450,23 +450,10 @@ class TwitterScraper:
 
         self.logger.debug("Tweets scraped into dictionary.")
         
+        
+        
         # Return the scraped tweet data as a dictionary
-        return {
-            "Username": [row[0] for row in tweet_data],
-            "Tweet": [row[1] for row in tweet_data],
-            "Timestamp": [row[2] for row in tweet_data],
-            "Likes": [row[3] for row in tweet_data],
-            "Impressions": [row[4] for row in tweet_data],
-            "Comments": [row[5] for row in tweet_data],
-            "Reposts": [row[6] for row in tweet_data],
-            "Bookmarks": [row[7] for row in tweet_data],
-            "id": [
-                hashlib.md5(
-                    f"{row[0]}_{row[1]}_{row[2]}".encode()
-                ).hexdigest()
-                for row in tweet_data
-            ],
-        }
+        return self.create_tweet_data_dict(tweet_data)
 
     def get_tweets(
         self,
@@ -577,3 +564,66 @@ class TwitterScraper:
             self.logger.debug("Failed to parse some values from aria-label; using defaults where necessary.")
 
         return username, content, timestamp, likes, impressions, comments, reposts, bookmarks
+
+
+    def parse_count(self, value: str) -> int:
+        """
+        Convert count strings like '1k' or '2.5k' to integer values, rounding if necessary.
+
+        Args:
+            value (str): The string to convert.
+
+        Returns:
+            int: The integer representation of the count.
+        """
+        value = value.lower()  # Handle both uppercase and lowercase abbreviations
+        if 'k' in value:
+            return float(value.replace('k', '')) * 1000
+        elif 'm' in value:
+            return float(value.replace('m', '')) * 1_000_000
+        else:
+            return float(value)
+        
+    def create_tweet_data_dict(self, tweet_data):
+        """
+        Create a dictionary for tweet data with an 'id' based on immutable fields only,
+        and converts count fields to integers.
+
+        Args:
+            tweet_data (List[List[str]]): List of tweet details, where each tweet's details are in a list.
+
+        Returns:
+            dict: Dictionary containing tweet data with an 'id' based on immutable fields.
+        """
+        # Convert all counts to integers
+        processed_data = [
+            [
+                row[0],
+                row[1],
+                row[2],
+                self.parse_count(row[3]),
+                self.parse_count(row[4]),
+                self.parse_count(row[5]),
+                self.parse_count(row[6]),
+                self.parse_count(row[7])
+            ]
+            for row in tweet_data
+        ]
+
+        # Create the dictionary with the converted data
+        return {
+            "Username": [row[0] for row in processed_data],
+            "Tweet": [row[1] for row in processed_data],
+            "Timestamp": [row[2] for row in processed_data],
+            "Likes": [row[3] for row in processed_data],
+            "Impressions": [row[4] for row in processed_data],
+            "Comments": [row[5] for row in processed_data],
+            "Reposts": [row[6] for row in processed_data],
+            "Bookmarks": [row[7] for row in processed_data],
+            "id": [
+                hashlib.md5(
+                    f"{row[0]}_{row[1]}_{row[2]}".encode()
+                ).hexdigest()
+                for row in processed_data
+            ],
+        }
