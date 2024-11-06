@@ -9,7 +9,9 @@ import os
 import time
 import json
 import re
+from datetime import datetime
 import random
+import math
 from typing import List, Tuple
 import hashlib
 
@@ -31,6 +33,7 @@ from CryptoFraudDetection.utils.logger import Logger
 from CryptoFraudDetection.utils.exceptions import (
     AuthenticationError,
 )
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dict
 
 
 class TwitterScraper:
@@ -627,3 +630,60 @@ class TwitterScraper:
                 for row in processed_data
             ],
         }
+        
+
+def scrape_in_blocks(
+    scraper: TwitterScraper,
+    search_query: str,
+    start_date: datetime,
+    end_date: datetime,
+    block_count: int,
+    total_tweet_count: int,
+    db_index: str,
+    logger: Logger
+) -> None:
+    """
+    Scrapes tweets in evenly distributed blocks between start and end dates,
+    then uploads each block to the database.
+
+    Args:
+        scraper (TwitterScraper): Instance of TwitterScraper to use for scraping.
+        search_query (str): The search query for tweets.
+        start_date (datetime): The start date for scraping.
+        end_date (datetime): The end date for scraping.
+        block_count (int): The number of blocks to divide the scraping period into.
+        total_tweet_count (int): The total number of tweets to scrape.
+        db_index (str): The Elasticsearch index to insert the data into.
+        logger (Logger): Logger for logging messages.
+    """
+    # Wrap the search query in quotes to ensure it appears in the tweets
+    search_query = f'"{search_query}"'
+
+    # Calculate block duration and tweets per block
+    block_duration = (end_date - start_date) / block_count
+    tweets_per_block = [
+        math.ceil(total_tweet_count * (i + 1) / (block_count * (block_count + 1) / 2))
+        for i in range(block_count)
+    ]
+
+    # Iterate over each block and scrape tweets
+    for i in range(block_count):
+        block_start_date = start_date + i * block_duration
+        block_end_date = block_start_date + block_duration
+
+        # Log the block information
+        logger.info(
+            f"Scraping block {i + 1}/{block_count}: {tweets_per_block[i]} tweets "
+            f"from {block_start_date} to {block_end_date}."
+        )
+
+        # Construct Twitter date query format (YYYY-MM-DD)
+        date_query = f"{search_query} since:{block_start_date.strftime('%Y-%m-%d')} until:{block_end_date.strftime('%Y-%m-%d')}"
+        
+        # Scrape tweets with cookies and save them to database
+        tweets_data = scraper.scrape_with_cookies(tweet_count=tweets_per_block[i], search_query=date_query, headless=True)
+        insert_dict(logger, db_index, tweets_data)
+        logger.info(f"Block {i + 1}/{block_count} completed and data inserted into the database.")
+
+        # Sleep briefly to avoid rate-limiting
+        time.sleep(random.uniform(3, 6))
