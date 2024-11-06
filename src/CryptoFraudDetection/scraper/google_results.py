@@ -6,6 +6,7 @@ Description:
 """
 
 import time
+import hashlib
 from collections import defaultdict
 from typing import Dict, List
 from selenium import webdriver
@@ -65,6 +66,7 @@ class GoogleResultsScraper:
             cookie_id (str): ID for the cookie acceptance button. Defaults to "L2AGLb".
             search_box_id (str): ID for the search input box. Defaults to "APjFqb".
             next_button_id (str): ID for the next page button. Defaults to "pnnext".
+            query (str): The search query to be performed on Google.
         """
         self.logger = logger
         self.box_class = box_class
@@ -72,6 +74,7 @@ class GoogleResultsScraper:
         self.cookie_id = cookie_id
         self.search_box_id = search_box_id
         self.next_button_id = next_button_id
+        self.query = ""
 
     def get_main_results(
         self,
@@ -94,11 +97,12 @@ class GoogleResultsScraper:
             Dict[str, List[str]]: A dictionary containing the links, titles,
             and descriptions of the search results.
         """
+        self.query = query
         self._validate_input(n_sites)
         driver = utils.get_driver(headless=headless)
 
         try:
-            self._perform_search(driver, query, delay_between_pages)
+            self._perform_search(driver, self.query, delay_between_pages)
             results = self._scrape_multiple_pages(driver, n_sites, delay_between_pages)
         finally:
             driver.quit()
@@ -248,6 +252,10 @@ class GoogleResultsScraper:
                 results["link"].append(link)
                 results["title"].append(title)
                 results["description"].append(desc)
+                results["query"].append(self.query)
+
+                id_pre_hash = link + title
+                results["id"].append(hashlib.md5(id_pre_hash.encode()).hexdigest())
             except NoSuchElementException:
                 self.logger.debug("Missing elements in result box. Skipping")
                 continue
