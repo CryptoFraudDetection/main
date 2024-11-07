@@ -244,7 +244,7 @@ class TwitterScraper:
             self.load_cookies(driver)
             self.navigate_to_explore(driver)
             self.perform_search(driver, search_query)
-            return self.scrape_tweets(driver, tweet_count)
+            return self.scrape_tweets(driver, tweet_count, search_query)
 
         finally:
             driver.quit()
@@ -384,25 +384,35 @@ class TwitterScraper:
                 probability_interval_1=0.95,
                 probability_interval_2=0.05,
             )
+
+            # Click on the "Latest" button
+            latest_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "/html/body/div[1]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[2]/a/div/div/span")
+                )
+            )
+            latest_button.click()
+            self.logger.info("Clicked on 'Latest'.")
+
         except NoSuchElementException:
             self.logger.handle_exception(
-                NoSuchElementException, "Search bar not found on the page."
+                NoSuchElementException, "Search bar or 'Latest' button not found on the page."
             )
         except TimeoutException:
             self.logger.handle_exception(
                 TimeoutException,
-                "Search bar did not become clickable within the timeout period.",
+                "Element did not become clickable within the timeout period.",
             )
         except ElementNotInteractableException:
             self.logger.handle_exception(
                 ElementNotInteractableException,
-                "Search bar was found but could not be interacted with.",
+                "Element was found but could not be interacted with.",
             )
-
     def scrape_tweets(
         self,
         driver: webdriver.Firefox,
         tweet_count: int,
+        search_query: str,
     ) -> dict[str, List[str]]:
         """
         Scrapes the specified number of tweets and returns a dictionary of tweet data.
@@ -477,7 +487,7 @@ class TwitterScraper:
         self.logger.debug("Tweets scraped into dictionary.")
 
         # Return the scraped tweet data as a dictionary
-        return self.create_tweet_data_dict(tweet_data)
+        return self.create_tweet_data_dict(tweet_data, search_query=search_query)
 
     def get_tweets(
         self,
@@ -644,7 +654,7 @@ class TwitterScraper:
         else:
             return float(value)
 
-    def create_tweet_data_dict(self, tweet_data):
+    def create_tweet_data_dict(self, tweet_data, search_query="") -> dict:
         """
         Create a dictionary for tweet data with an 'id' based on immutable fields only,
         and converts count fields to integers.
@@ -652,6 +662,7 @@ class TwitterScraper:
         Args:
             tweet_data (List[List[str]]): List of tweet details, where each tweet's
                 details are in a list.
+            search_query (str): The search query used for scraping.
 
         Returns:
             dict: Dictionary containing tweet data with an 'id' based on immutable fields.
@@ -681,6 +692,7 @@ class TwitterScraper:
             "Comments": [row[5] for row in processed_data],
             "Reposts": [row[6] for row in processed_data],
             "Bookmarks": [row[7] for row in processed_data],
+            "SearchKeyword": [search_query] * len(processed_data),  # Added search keyword column
             "id": [
                 hashlib.md5(f"{row[0]}_{row[1]}_{row[2]}".encode()).hexdigest()
                 for row in processed_data
