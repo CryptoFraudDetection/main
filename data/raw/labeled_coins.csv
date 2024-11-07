@@ -1,11 +1,10 @@
-Coin Name,Alternative Name,Short Name,Classification
-FTX Token,,FTT,Scam
-Terra Luna Classic,Terra Luna,LUNC,Scam
-Squid-Game-Coin,,SQUID,Scam
-STA,,STA,Scam
-BeerCoin,,BEER,Scam
-BitForex,,BF,Scam
-Bitcoin,,BTC,Non-Scam
-Ethereum,,ETH,Non-Scam
-Cosmos,,ATOM,Non-Scam
-Avalanche,,AVAX,Non-Scam
+Coin Name,Alternative Name,Short Name,Classification,Start Date,Scam Date
+FTX Token,,FTT,Scam,01/08/2019,
+Terra Luna Classic,Terra Luna,LUNC,Scam,27/07/2019,
+Squid-Game-Coin,,SQUID,Scam,15/10/2024,
+BeerCoin,,BEER,Scam,27/05/2024,
+BitForex,,BF,Scam,31/08/2019,
+Bitcoin,,BTC,Non-Scam,14/07/2010,
+Ethereum,,ETH,Non-Scam,08/08/2015,
+Cosmos,,ATOM,Non-Scam,15/03/2019,
+Avalanche,,AVAX,Non-Scam,23/09/2020,
