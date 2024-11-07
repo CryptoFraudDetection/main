@@ -104,27 +104,31 @@ class RedditScraper:
                 "date": ".//time[@datetime]",
                 "author": './/a[contains(@class, "author")]',
             }
-            elements = {
-                name: post_div.find_element(By.XPATH, xpath)
-                for name, xpath in xpaths.items()
-            }
-            return {
+            elements = {}
+            for name, xpath in xpaths.items():
+                try:
+                    self._wait_for_element((By.XPATH, xpath))
+                    elements[name] = post_div.find_element(By.XPATH, xpath)
+                except NoSuchElementException:
+                    pass
+            post_metadata = {
                 "id": post_div.get_attribute("data-fullname"),
                 "title": elements["title"].text,
                 "url": elements["title"].get_attribute("href"),
-                "score": elements["score"].text.split()[0],
                 "num_comment": elements["comments"].text.split()[0],
                 "date": elements["date"].get_attribute("datetime"),
                 "author": elements["author"].text,
                 "author_url": elements["author"].get_attribute("href"),
             }
+            if "score" in elements:
+                post_metadata["score"] = elements["score"].text.split()[0],
+            return post_metadata
         except Exception as e:
             self._logger.error(f"Error extracting post details: {e}")
             return {}
         
     def get_post_list(self, subreddit: str, search_query: str, limit: int = 100, after_post_id:str=None) -> None:
         """Search for posts in a specific subreddit, max 100"""
-        # TODO: check if it is limited to subreddit
         if limit > self._max_search_limit:
             raise ValueError(f"Limit must be less than {self._max_search_limit}")
         url = (
@@ -156,13 +160,6 @@ class RedditScraper:
             By.XPATH, '//div[contains(@class, "search-result-link")]'
         )
 
-        # Extract post metadata from the html elements
-        for result in search_results:
-            post = self._extract_post_metadata(result)
-            post['subreddit'] = subreddit
-            post['search_query'] = search_query
-            self.post_data.append(post)
-        
         return search_results
         
 
@@ -193,8 +190,16 @@ class RedditScraper:
                     self._logger.error(f"Error getting post list, retrying: {e}")
                     self._wait()
             if search_results is None:
-                raise f"Error getting post list, tried {retry} times: {e}"
+                raise f"Error getting post list, tried {retry} times."
 
+
+            # Extract post metadata from the html elements
+            for result in search_results:
+                post = self._extract_post_metadata(result)
+                post['subreddit'] = subreddit
+                post['search_query'] = search_query
+                self.post_data.append(post)
+            
             # Get the ID of the oldest post to use in the next search
             after_post_id = search_results[-1].get_attribute("data-fullname")
             
