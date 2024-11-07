@@ -6,6 +6,7 @@ Description:
 
 Authors:
 - Aaron Brülisauer me@nodon.io
+- Florian Baumgartner florian.baumgartner1@students.fhnw.ch
 """
 
 import logging
