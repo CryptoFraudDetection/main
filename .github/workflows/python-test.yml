@@ -16,6 +16,7 @@ jobs:
 
     env:
       COOKIE_FILE_CONTENT_X: ${{ secrets.COOKIE_FILE_CONTENT_X }}
+      ELASTICSEARCH_HOSTNAME: ${{ secrets.ELASTICSEARCH_HOSTNAME }}
       ELASTICSEARCH_API_KEY: ${{ secrets.ELASTICSEARCH_API_KEY }}
 
     steps:
