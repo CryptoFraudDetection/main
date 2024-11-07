@@ -16,7 +16,7 @@ from CryptoFraudDetection.utils.exceptions import APIKeyNotSetException
 
 # Load environment variables
 dotenv_path = find_dotenv()
-if dotenv_path:
+if dotenv_path and os.getenv("ELASTICSEARCH_API_KEY") is None:
     load_dotenv(dotenv_path)
 
 ELASTICSEARCH_HOSTNAME = os.getenv("ELASTICSEARCH_HOSTNAME")
