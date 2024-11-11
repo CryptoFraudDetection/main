@@ -82,6 +82,7 @@ class GoogleResultsScraper:
         n_sites: int = 5,
         delay_between_pages: float = 1.0,
         headless: bool = False,
+        proxy_address: str | None = None,
     ) -> Dict[str, List[str]]:
         """
         Function to scrape Google search results for the given query.
@@ -92,6 +93,7 @@ class GoogleResultsScraper:
             delay_between_pages (float): Delay (in seconds) between page navigations.
                 Default is 1 second.
             headless (bool): Whether to run the browser in headless mode (default is False).
+            proxy_address (str): The proxy address to use for the browser (default is None).
 
         Returns:
             Dict[str, List[str]]: A dictionary containing the links, titles,
@@ -99,7 +101,7 @@ class GoogleResultsScraper:
         """
         self.query = query
         self._validate_input(n_sites)
-        driver = utils.get_driver(headless=headless)
+        driver = utils.get_driver(headless=headless, proxy_address=proxy_address)
 
         try:
             self._perform_search(driver, self.query, delay_between_pages)
