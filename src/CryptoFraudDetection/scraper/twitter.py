@@ -388,7 +388,10 @@ class TwitterScraper:
             # Click on the "Latest" button
             latest_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "/html/body/div[1]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[2]/a/div/div/span")
+                    (
+                        By.XPATH,
+                        "/html/body/div[1]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[2]/a/div/div/span",
+                    )
                 )
             )
             latest_button.click()
@@ -396,7 +399,8 @@ class TwitterScraper:
 
         except NoSuchElementException:
             self.logger.handle_exception(
-                NoSuchElementException, "Search bar or 'Latest' button not found on the page."
+                NoSuchElementException,
+                "Search bar or 'Latest' button not found on the page.",
             )
         except TimeoutException:
             self.logger.handle_exception(
@@ -408,6 +412,7 @@ class TwitterScraper:
                 ElementNotInteractableException,
                 "Element was found but could not be interacted with.",
             )
+
     def scrape_tweets(
         self,
         driver: webdriver.Firefox,
@@ -504,7 +509,6 @@ class TwitterScraper:
         """
         attempts = 0
         max_attempts = 3  # Maximum number of retry attempts
-        
 
         while attempts < max_attempts:
             try:
@@ -514,19 +518,17 @@ class TwitterScraper:
                         (By.XPATH, "//article[@data-testid='tweet']")
                     )
                 )
-            except TimeoutException as e:
+            except TimeoutException:
                 attempts += 1
                 self.logger.warning(
                     f"Attempt {attempts} of {max_attempts} failed: Timed out while waiting for tweet elements. Retrying..."
                 )
-                self.random_sleep(
-                    interval_1=(2, 6),
-                    probability_interval_1=1
-                )
+                self.random_sleep(interval_1=(2, 6), probability_interval_1=1)
 
         # After max_attempts retries, raise the TimeoutException
         self.logger.handle_exception(
-            TimeoutException, "Max retries reached. Timed out while waiting for tweet elements."
+            TimeoutException,
+            "Max retries reached. Timed out while waiting for tweet elements.",
         )
         return []
 
@@ -692,7 +694,8 @@ class TwitterScraper:
             "Comments": [row[5] for row in processed_data],
             "Reposts": [row[6] for row in processed_data],
             "Bookmarks": [row[7] for row in processed_data],
-            "SearchKeyword": [search_query] * len(processed_data),  # Added search keyword column
+            "SearchKeyword": [search_query]
+            * len(processed_data),  # Added search keyword column
             "id": [
                 hashlib.md5(f"{row[0]}_{row[1]}_{row[2]}".encode()).hexdigest()
                 for row in processed_data
@@ -730,10 +733,10 @@ def scrape_in_blocks(
 
     # Calculate approximate block duration
     block_duration = (end_date - start_date) / block_count
-    
+
     # Adjusted calculation for tweets per block with a flatter increase
     tweets_per_block = [
-        math.ceil(total_tweet_count * (i + 1) ** 0.8 / (block_count ** 1.8)) 
+        math.ceil(total_tweet_count * (i + 1) ** 0.8 / (block_count**1.8))
         for i in range(block_count)
     ]
 
@@ -745,7 +748,7 @@ def scrape_in_blocks(
     # Iterate over each block and scrape tweets
     for i in range(block_count):
         block_start_date = start_date + i * block_duration
-        
+
         # Ensure the last block ends on or just before the `end_date`
         if i == block_count - 1:
             block_end_date = end_date
@@ -760,15 +763,20 @@ def scrape_in_blocks(
 
         # Construct Twitter date query format (YYYY-MM-DD)
         date_query = f"{search_query} since:{block_start_date.strftime('%Y-%m-%d')} until:{block_end_date.strftime('%Y-%m-%d')}"
-        
+
         # Scrape tweets with cookies and save them to database
-        tweets_data = scraper.scrape_with_cookies(tweet_count=tweets_per_block[i], search_query=date_query, headless=headless)
+        tweets_data = scraper.scrape_with_cookies(
+            tweet_count=tweets_per_block[i], search_query=date_query, headless=headless
+        )
         insert_dict(logger, db_index, tweets_data)
-        logger.debug(f"Block {i + 1}/{block_count} completed and data inserted into the database.")
+        logger.debug(
+            f"Block {i + 1}/{block_count} completed and data inserted into the database."
+        )
 
         time.sleep(random.uniform(3, 6))
 
     final_date_query = f"{search_query} since:{end_date.strftime('%Y-%m-%d')} until:{(end_date + timedelta(days=1)).strftime('%Y-%m-%d')}"
-    additional_tweets_data = scraper.scrape_with_cookies(tweet_count=20, search_query=final_date_query, headless=True)
+    additional_tweets_data = scraper.scrape_with_cookies(
+        tweet_count=20, search_query=final_date_query, headless=True
+    )
     insert_dict(logger, db_index, additional_tweets_data)
-

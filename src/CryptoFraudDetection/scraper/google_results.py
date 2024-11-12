@@ -82,6 +82,7 @@ class GoogleResultsScraper:
         n_sites: int = 5,
         delay_between_pages: float = 1.0,
         headless: bool = False,
+        proxy_protocol: str | None = None,
         proxy_address: str | None = None,
     ) -> Dict[str, List[str]]:
         """
@@ -101,7 +102,11 @@ class GoogleResultsScraper:
         """
         self.query = query
         self._validate_input(n_sites)
-        driver = utils.get_driver(headless=headless, proxy_address=proxy_address)
+        driver = utils.get_driver(
+            headless=headless,
+            proxy_protocol=proxy_protocol,
+            proxy_address=proxy_address,
+        )
 
         try:
             self._perform_search(driver, self.query, delay_between_pages)
