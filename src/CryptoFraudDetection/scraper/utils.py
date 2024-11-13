@@ -32,6 +32,8 @@ def get_driver(
     Returns:
         WebDriver: A Selenium WebDriver object.
     """
+    driver = None
+
     options = webdriver.FirefoxOptions()
     options.set_preference("devtools.jsonview.enabled", False)
 
@@ -86,4 +88,4 @@ def get_driver(
                 f"Proxy {proxy_protocol}:{proxy_address} is not working."
             ) from e
 
-    return driver
+    return webdriver.Firefox(options=options) if not driver else driver
