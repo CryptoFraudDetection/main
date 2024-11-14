@@ -10,7 +10,7 @@ import hashlib
 from collections import defaultdict
 from typing import Dict, List
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
 
@@ -110,6 +110,7 @@ class GoogleResultsScraper:
 
         try:
             self._perform_search(driver, self.query, delay_between_pages)
+            time.sleep(delay_between_pages)
             results = self._scrape_multiple_pages(driver, n_sites, delay_between_pages)
         finally:
             driver.quit()
@@ -157,7 +158,7 @@ class GoogleResultsScraper:
         try:
             driver.find_element(By.ID, self.cookie_id).click()
             self.logger.info("Accepted Google's cookies.")
-        except NoSuchElementException:
+        except (NoSuchElementException, TimeoutException):
             self.logger.warning("Cookie acceptance button not found.")
 
     def _submit_search_query(self, driver: webdriver.Firefox, query: str) -> None:

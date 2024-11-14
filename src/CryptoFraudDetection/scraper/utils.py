@@ -88,4 +88,7 @@ def get_driver(
                 f"Proxy {proxy_protocol}:{proxy_address} is not working."
             ) from e
 
-    return webdriver.Firefox(options=options) if not driver else driver
+    driver = webdriver.Firefox(options=options) if not driver else driver
+    driver.set_page_load_timeout(60)
+
+    return driver

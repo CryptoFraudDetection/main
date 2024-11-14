@@ -12,7 +12,7 @@ from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_
 es = get_elasticsearch_client()
 
 
-def search_data(index: str, q: str) -> ObjectApiResponse[Any]:
+def search_data(index: str, q: str, size: int = None) -> ObjectApiResponse[Any]:
     """
     Search data in Elasticsearch.
 
@@ -23,4 +23,6 @@ def search_data(index: str, q: str) -> ObjectApiResponse[Any]:
     Returns:
     - dict: Elasticsearch search results.
     """
-    return es.search(index=index, q=q)
+    if size:
+        return es.search(index=index, q=q, size=size)
+    return es.search(index=index, q=q, size=10000)
