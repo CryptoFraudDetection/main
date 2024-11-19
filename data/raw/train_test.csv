@@ -1,0 +1,14 @@
+split,market_cap_e9,Coin Name,Alternative Name,Short Name,Classification,Start Date,Scam Date
+train,1_800,Bitcoin,,BTC,Non-Scam,2010-07-14,
+test,550,Ethereum,,ETH,Non-Scam,2015-08-08,
+train,9.9,Chainlink,,LINK,Non-Scam,2017-10-01,
+test,11,Cosmos,,ATOM,Non-Scam,2019-03-15,
+train,1.8,THORChain,,RUNE,Non-Scam,2019-07-24,
+train,30,Avalanche,,AVAX,Non-Scam,2020-09-23,
+train,0.057,BitForex,,BF,Scam,2019-08-31,2024-03-05
+test,9.5,FTX Token,,FTT,Scam,2019-08-01,2022-11-07
+train,41,Terra Luna Classic,Terra Classic,LUNC,Scam,2019-07-27,2022-05-08
+test,0,Safe Moon,,SAFEMOON,Scam,2022-01-17,2023-10-31
+train,0,Teddy Doge,,TEDDY V2,Scam,2022-06-28,2022-07-21
+train,0,STOA Network,,STA,Scam,2021-12-28,2022-07-17
+train,0.31,BeerCoin,,BEER,Scam,2024-05-27,2024-06-24
