@@ -3,10 +3,6 @@ jupyter: python3
 title: Scrape Reddit Posts
 ---
 
-# Reddit Metat Data Scraper
-
-## Setup
-
 ```{python}
 from CryptoFraudDetection.utils.enums import ScraperNotebookMode, LoggerMode
 from CryptoFraudDetection.utils.logger import Logger
@@ -22,6 +18,7 @@ MODE=ScraperNotebookMode.WRITE
 
 ```{python}
 reddit_scraper = RedditScraper(logger)
+reddit_scraper.start_driver()
 ```
 
 ## Scrape Reddit Meta Data
@@ -33,3 +30,4 @@ post_list = reddit_scraper.get_multipage_post_list('r/CryptoCurrency','Terra+Lun
 ```{python}
 post_list[-1]
 ```
+
