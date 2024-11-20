@@ -3,6 +3,8 @@ jupyter: python3
 title: Scrape Reddit Posts
 ---
 
+# Setup
+
 ```{python}
 from CryptoFraudDetection.utils.enums import ScraperNotebookMode, LoggerMode
 from CryptoFraudDetection.utils.logger import Logger
@@ -24,10 +26,10 @@ reddit_scraper.start_driver()
 ## Scrape Reddit Meta Data
 
 ```{python}
-post_list = reddit_scraper.get_multipage_post_list('r/CryptoCurrency','Terra+Luna', limit=10, start_date='2024-09-01')
+post_list = reddit_scraper.get_multipage_post_list('r/CryptoCurrency','Bitcoin')
 ```
 
 ```{python}
-post_list[-1]
+len(post_list)
 ```
 

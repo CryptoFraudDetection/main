@@ -26,7 +26,7 @@ class RedditScraper:
         self,
         logger: logging.Logger,
         base_url: str = "https://old.reddit.com",
-        wait_range: tuple[int, int] = (2, 5),
+        wait_range: tuple[int, int] = (2, 4),
         cookies_file: str = "cookies/reddit-cookies.pkl",
         headless: bool = True,
         max_search_limit: int = 100,
@@ -168,7 +168,7 @@ class RedditScraper:
         self,
         subreddit: str,
         search_query: str,
-        limit: int = 10000,
+        limit: int = 300,
         start_date: str = None,
         after_post_id: str = None,
         retry: int = 5,
@@ -280,12 +280,20 @@ class RedditScraper:
         except Exception as e:
             self._logger.error(f"Error loading post URL {post['url']}: {e}")
 
-        post_text_xpath = (
-            '//div[contains(@class, "entry")]//div[contains(@class, "md")]'
-        )
-        post_text_div = self._wait_for_element((By.XPATH, post_text_xpath))
-
-        post["text"] = post_text_div.text
+        post_entry_xpath = '//div[contains(@class, "entry")]'
+        try:
+            post_entry = self._wait_for_element((By.XPATH, post_entry_xpath))
+        except TimeoutException as e:
+            self._logger.error(f"Error loading post URL {post['url']}: {e}")
+            return post
+        
+        post_text_xpath = './/div[contains(@class, "md")]'
+        try:
+            post_text_div = post_entry.find_element(By.XPATH, post_text_xpath)
+            post["text"] = post_text_div.text
+        except NoSuchElementException:
+            post["text"] = ''
+        
         post["children"] = self._extract_all_comments()
         
         return post
@@ -309,14 +317,12 @@ class RedditScraper:
         return pd.DataFrame(self.post_data)
 
 
-def scrape_reddit(logger:logging.Logger, *args, **kwargs):
-    """
-    scrape Reddit
-    """
-    scraper = RedditScraper(logger)
-    scraper.start_driver()
-    scraper.get_multipage_post_list(*args, **kwargs)
-    scraper.scrape_all_post_contents()
-    scraper.quit()
-    df = scraper.to_dataframe()
-    return df
+    def scrape(self, *args, **kwargs):
+        """
+        scrape Reddit
+        """
+        self.start_driver()
+        self.get_multipage_post_list(*args, **kwargs)
+        self.scrape_all_post_contents()
+        self.quit()
+        return self.to_dataframe()
