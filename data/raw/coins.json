@@ -1,10 +1,10 @@
-coins = [
+[
     {
         "name": "Bitcoin",
         "symbol": "BTC",
-        "fraud": False,
-        "test": False,
-        "max_market_cap_e9": 1_800.0,
+        "fraud": false,
+        "test": false,
+        "max_market_cap_e9": 1800.0,
         "start_date": "2010-07-14",
         "subreddits": [
             "CryptoCurrency",
@@ -13,14 +13,16 @@ coins = [
             "Crypto",
             "Bitcoin",
             "wallstreetbets",
-            "Superstonk",
+            "Superstonk"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "Ethereum",
         "symbol": "ETH",
-        "fraud": False,
-        "test": True,
+        "fraud": false,
+        "test": true,
         "max_market_cap_e9": 550.0,
         "start_date": "2015-08-08",
         "subreddits": [
@@ -30,18 +32,18 @@ coins = [
             "Crypto",
             "ethereum",
             "ethtrader",
-            "Superstonk",
+            "Superstonk"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "Terra Classic",
-        "alt_name": "Terra Luna Classic",
         "symbol": "LUNC",
-        "fraud": True,
-        "test": False,
+        "fraud": true,
+        "test": false,
         "max_market_cap_e9": 41.0,
         "start_date": "2019-07-07",
-        "end_date": "2022-05-08",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -51,14 +53,16 @@ coins = [
             "CryptoCurrencyClassic",
             "Crypto_General",
             "LunaClassic",
-            "Gemini",
+            "Gemini"
         ],
+        "alt_name": "Terra Luna Classic",
+        "end_date": "2022-05-08"
     },
     {
         "name": "Avalanche",
         "symbol": "AVAX",
-        "fraud": False,
-        "test": False,
+        "fraud": false,
+        "test": false,
         "max_market_cap_e9": 30.0,
         "start_date": "2020-09-23",
         "subreddits": [
@@ -71,14 +75,16 @@ coins = [
             "Thecoinrise",
             "Crypto_General",
             "CryptoCurrencyClassic",
-            "cryptonewsland",
+            "cryptonewsland"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "Cosmos",
         "symbol": "ATOM",
-        "fraud": False,
-        "test": True,
+        "fraud": false,
+        "test": true,
         "max_market_cap_e9": 11.0,
         "start_date": "2019-03-15",
         "subreddits": [
@@ -92,14 +98,16 @@ coins = [
             "CryptoEducationHub",
             "Blofin",
             "ledgerwallet",
-            "kryptomaniak",
+            "kryptomaniak"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "Chainlink",
         "symbol": "LINK",
-        "fraud": False,
-        "test": False,
+        "fraud": false,
+        "test": false,
         "max_market_cap_e9": 9.9,
         "start_date": "2017-10-01",
         "subreddits": [
@@ -110,17 +118,18 @@ coins = [
             "ethtrader",
             "Chainlink",
             "ethereum",
-            "LINKTrader",
+            "LINKTrader"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "FTX Token",
         "symbol": "FTT",
-        "fraud": True,
-        "test": True,
+        "fraud": true,
+        "test": true,
         "max_market_cap_e9": 9.5,
         "start_date": "2019-08-01",
-        "end_date": "2022-11-07",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -131,13 +140,14 @@ coins = [
             "SafeMoon",
             "ftx"
         ],
+        "alt_name": null,
+        "end_date": "2022-11-07"
     },
-    
     {
         "name": "THORChain",
         "symbol": "RUNE",
-        "fraud": False,
-        "test": False,
+        "fraud": false,
+        "test": false,
         "max_market_cap_e9": 1.8,
         "start_date": "2019-07-24",
         "subreddits": [
@@ -152,17 +162,18 @@ coins = [
             "cryptoloversclub",
             "lolacoin",
             "CryptoBreakingDotCom",
-            "Crypto_General",
+            "Crypto_General"
         ],
+        "alt_name": null,
+        "end_date": null
     },
     {
         "name": "BeerCoin",
         "symbol": "BEER",
-        "fraud": True,
-        "test": False,
+        "fraud": true,
+        "test": false,
         "max_market_cap_e9": 0.31,
         "start_date": "2024-05-27",
-        "end_date": "2024-06-24",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -173,17 +184,18 @@ coins = [
             "Kryptostrassenwetten",
             "SolCoins",
             "bitpanda",
-            "Memecoinhub",
+            "Memecoinhub"
         ],
+        "alt_name": null,
+        "end_date": "2024-06-24"
     },
     {
         "name": "BitForex",
         "symbol": "BF",
-        "fraud": True,
-        "test": False,
+        "fraud": true,
+        "test": false,
         "max_market_cap_e9": 0.057,
         "start_date": "2019-08-31",
-        "end_date": "2024-03-05",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -194,33 +206,35 @@ coins = [
             "SafeMoon",
             "BitForex",
             "Superstonk",
-            "CryptoCurrencyClassic",
+            "CryptoCurrencyClassic"
         ],
+        "alt_name": null,
+        "end_date": "2024-03-05"
     },
     {
         "name": "Safe Moon",
         "symbol": "SAFEMOON",
-        "fraud": True,
-        "test": True,
+        "fraud": true,
+        "test": true,
         "max_market_cap_e9": 0.0,
         "start_date": "2022-01-17",
-        "end_date": "2023-10-31",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
             "CryptoMarkets",
             "Crypto",
-            "SafeMoon",
+            "SafeMoon"
         ],
+        "alt_name": null,
+        "end_date": "2023-10-31"
     },
     {
         "name": "Teddy Doge",
         "symbol": "TEDDY V2",
-        "fraud": True,
-        "test": False,
+        "fraud": true,
+        "test": false,
         "max_market_cap_e9": 0.0,
         "start_date": "2022-06-28",
-        "end_date": "2023-12-31",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -230,28 +244,26 @@ coins = [
             "cryptopricesalerts",
             "CoinMarketDo",
             "dogecoin",
-            "kryptocal",
+            "kryptocal"
         ],
+        "alt_name": null,
+        "end_date": "2023-12-31"
     },
     {
         "name": "STOA Network",
         "symbol": "STA",
-        "fraud": True,
-        "test": False,
+        "fraud": true,
+        "test": false,
         "max_market_cap_e9": 0.0,
         "start_date": "2021-12-28",
-        "end_date": "2022-07-17",
         "subreddits": [
             "BitMartExchange",
             "CryptoCurrency",
             "CryptoMoonShots",
             "CryptoMarkets",
-            "Crypto",
+            "Crypto"
         ],
-    },
+        "alt_name": null,
+        "end_date": "2022-07-17"
+    }
 ]
-
-import pandas as pd
-
-df = pd.DataFrame(coins)
-df.to_json("data/raw/coins.json", orient="records")
