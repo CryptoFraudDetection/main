@@ -66,6 +66,7 @@ def get_driver(
 
         driver = webdriver.Firefox(options=options)
         try:
+            driver.set_page_load_timeout(15)
             driver.get("https://httpbin.io/ip")
 
             fetched_element = driver.find_element("tag name", "pre").text
