@@ -30,7 +30,10 @@ dependencies = [
     "wandb==0.18.5",
     "python-dotenv==1.0.1",
     "praw==7.8.1",
-    "tqdm==4.67.0"
+    "tqdm==4.67.0",
+    "altair==5.4.1",
+    "matplotlib==3.9.2",
+    "seaborn==0.13.2",
 ]
 
 [project.urls]
