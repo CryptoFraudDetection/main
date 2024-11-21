@@ -5,24 +5,39 @@ title: Scrape Reddit Posts
 
 
 ```{python}
-from CryptoFraudDetection.utils.enums import ScraperNotebookMode
-from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
-
-from typing import Any
-from elastic_transport import ObjectApiResponse
-from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
-
-
-MODE=ScraperNotebookMode.READ
+import pandas as pd
+import matplotlib.pyplot as plt
 ```
 
 ```{python}
-es = get_elasticsearch_client()
+df = pd.read_parquet("../data/processed/reddit_posts_2.parquet")
 ```
 ```{python}
-results = es.search(index='reddit_posts', q='query:bitcoin')
+df.head(5)
 ```
 ```{python}
-for hit in results['hits']['hits']:
-    print(hit["_source"])
+
+df['created'] = pd.to_datetime(df['created'])
+
+df['date'] = df['created'].dt.date
+grouped = df.groupby(['date', 'search_query']).size().reset_index(name='count')
+
+
+pivot_df = grouped.pivot(index='date', columns='search_query', values='count').fillna(0)
+```
+```{python}
+
+fig, axes = plt.subplots(nrows=len(pivot_df.columns), ncols=1, figsize=(10, len(pivot_df.columns) * 3), sharex=True)
+
+for idx, (query, data) in enumerate(pivot_df.items()):
+    ax = axes[idx]
+    ax.plot(data.index, data.values, label=query)
+    ax.set_title(f"Search Query: {query}")
+    ax.set_ylabel('Anzahl der Einträge')
+    ax.legend(loc='upper left')
+    ax.grid(True)
+
+plt.xlabel('Datum')
+plt.tight_layout()
+plt.show()
 ```
