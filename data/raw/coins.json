@@ -15,7 +15,6 @@
             "wallstreetbets",
             "Superstonk"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
@@ -34,11 +33,10 @@
             "ethtrader",
             "Superstonk"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
-        "name": "Terra Classic",
+        "name": "Terra Luna",
         "symbol": "LUNC",
         "fraud": true,
         "test": false,
@@ -55,7 +53,6 @@
             "LunaClassic",
             "Gemini"
         ],
-        "alt_name": "Terra Luna Classic",
         "end_date": "2022-05-08"
     },
     {
@@ -77,7 +74,6 @@
             "CryptoCurrencyClassic",
             "cryptonewsland"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
@@ -100,7 +96,6 @@
             "ledgerwallet",
             "kryptomaniak"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
@@ -120,7 +115,6 @@
             "ethereum",
             "LINKTrader"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
@@ -140,7 +134,6 @@
             "SafeMoon",
             "ftx"
         ],
-        "alt_name": null,
         "end_date": "2022-11-07"
     },
     {
@@ -164,7 +157,6 @@
             "CryptoBreakingDotCom",
             "Crypto_General"
         ],
-        "alt_name": null,
         "end_date": null
     },
     {
@@ -186,7 +178,6 @@
             "bitpanda",
             "Memecoinhub"
         ],
-        "alt_name": null,
         "end_date": "2024-06-24"
     },
     {
@@ -208,7 +199,6 @@
             "Superstonk",
             "CryptoCurrencyClassic"
         ],
-        "alt_name": null,
         "end_date": "2024-03-05"
     },
     {
@@ -225,7 +215,6 @@
             "Crypto",
             "SafeMoon"
         ],
-        "alt_name": null,
         "end_date": "2023-10-31"
     },
     {
@@ -246,7 +235,6 @@
             "dogecoin",
             "kryptocal"
         ],
-        "alt_name": null,
         "end_date": "2023-12-31"
     },
     {
@@ -263,7 +251,6 @@
             "CryptoMarkets",
             "Crypto"
         ],
-        "alt_name": null,
         "end_date": "2022-07-17"
     }
 ]

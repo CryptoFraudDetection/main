@@ -34,8 +34,7 @@ coins = [
         ],
     },
     {
-        "name": "Terra Classic",
-        "alt_name": "Terra Luna Classic",
+        "name": "Terra Luna",
         "symbol": "LUNC",
         "fraud": True,
         "test": False,
