@@ -1,0 +1,28 @@
+---
+jupyter: python3
+title: Scrape Reddit Posts
+---
+
+
+```{python}
+from CryptoFraudDetection.utils.enums import ScraperNotebookMode
+from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
+
+from typing import Any
+from elastic_transport import ObjectApiResponse
+from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
+
+
+MODE=ScraperNotebookMode.READ
+```
+
+```{python}
+es = get_elasticsearch_client()
+```
+```{python}
+results = es.search(index='reddit_posts', q='query:bitcoin')
+```
+```{python}
+for hit in results['hits']['hits']:
+    print(hit["_source"])
+```
