@@ -3,7 +3,6 @@ jupyter: python3
 ---
 
 ```{python}
-%pip install tqdm
 import pandas as pd
 from tqdm import tqdm
 
@@ -14,7 +13,7 @@ from CryptoFraudDetection.elasticsearch.data_insertion import insert_dataframe
 ```
 
 ```{python}
-response = search_data(index="reddit_posts_2", q="*", size=1)
+response = search_data(index="reddit_posts", q="*", size=6000)
 ```
 
 ```{python}
@@ -100,7 +99,7 @@ df.head()
 ```
 
 ```{python}
-df.to_parquet("../data/processed/reddit_posts_2.parquet", index=False)
+df.to_parquet("../data/processed/reddit_posts.parquet", index=False)
 ```
 
 ```{python}
@@ -108,6 +107,6 @@ logger_ = Logger(
     name="reddit_unwrap_posts", level=LoggerMode.DEBUG, log_dir="../logs"
 )
 
-_ = insert_dataframe(logger=logger_, index="reddit_posts_unwrapped_2", df=df)
+_ = insert_dataframe(logger=logger_, index="reddit_posts_unwrapped", df=df)
 ```
 
