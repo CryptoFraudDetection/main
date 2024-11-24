@@ -1,44 +1,41 @@
-"""
-File: twitter.py
+"""File: twitter.py.
 
 Description:
 - This file is used to scrape data from the website Twitter (X).
 """
 
-import os
-import time
-import json
-import re
-from datetime import datetime, timedelta
-import random
-import math
-from typing import List, Tuple
 import hashlib
+import json
+import math
+import os
+import random
+import re
+import time
+from datetime import datetime, timedelta
 
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import (
-    NoSuchElementException,
-    TimeoutException,
     ElementNotInteractableException,
     JavascriptException,
+    NoSuchElementException,
+    TimeoutException,
 )
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
-import CryptoFraudDetection.scraper.utils as utils
-from CryptoFraudDetection.utils.logger import Logger
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dict
+from CryptoFraudDetection.scraper import utils
 from CryptoFraudDetection.utils.exceptions import (
     AuthenticationError,
 )
-from CryptoFraudDetection.elasticsearch.data_insertion import insert_dict
+from CryptoFraudDetection.utils.logger import Logger
 
 
 class TwitterScraper:
-    """
-    A scraper class for Twitter (X) that can be used to scrape tweets
+    """A scraper class for Twitter (X) that can be used to scrape tweets
     and other data from the platform.
 
     Attributes:
@@ -47,6 +44,7 @@ class TwitterScraper:
         logger (Logger): Logger for logging messages.
         cookies_loaded (bool): Whether cookies have been loaded for the current session.
         cookies_file_path (str): Path to the file containing cookies.
+
     """
 
     def __init__(
@@ -56,13 +54,13 @@ class TwitterScraper:
         password: str = "",
         cookies_file_path: str = "",
     ) -> None:
-        """
-        Initializes the TwitterScraper class with optional login credentials and a logger.
+        """Initializes the TwitterScraper class with optional login credentials and a logger.
 
         Args:
             username (str, optional): The Twitter username.
             password (str, optional): The Twitter password.
             logger (Logger, optional): Logger for logging messages.
+
         """
         self.username = username
         self.password = password
@@ -75,12 +73,12 @@ class TwitterScraper:
         path: str,
         headless: bool = False,
     ) -> None:
-        """
-        Logs into Twitter and saves cookies for later use.
+        """Logs into Twitter and saves cookies for later use.
 
         Args:
             path (str): Path to the file where cookies should be saved.
             headless (bool): Whether to run the scraper in headless mode.
+
         """
         driver = utils.get_driver(headless=headless)
 
@@ -96,20 +94,22 @@ class TwitterScraper:
         self,
         driver: webdriver.Firefox,
     ) -> None:
-        """
-        Navigates to the Twitter login page.
+        """Navigates to the Twitter login page.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
+
         """
         try:
             driver.get("https://www.x.com")
             wait = WebDriverWait(driver, 10)
             self.random_sleep(
-                interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0
+                interval_1=(6, 11),
+                probability_interval_1=1,
+                probability_interval_2=0.0,
             )
             login_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//a[@href='/login']"))
+                EC.element_to_be_clickable((By.XPATH, "//a[@href='/login']")),
             )
 
             try:
@@ -130,11 +130,11 @@ class TwitterScraper:
         self,
         driver: webdriver.Firefox,
     ) -> None:
-        """
-        Enters login credentials on the Twitter login page.
+        """Enters login credentials on the Twitter login page.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
+
         """
         wait = WebDriverWait(driver, 10)
 
@@ -143,7 +143,9 @@ class TwitterScraper:
             wait.until(EC.presence_of_element_located((By.NAME, "text")))
             username_field = driver.find_element(By.NAME, "text")
             self.random_sleep(
-                interval_1=(2, 4), probability_interval_1=1, probability_interval_2=0.0
+                interval_1=(2, 4),
+                probability_interval_1=1,
+                probability_interval_2=0.0,
             )
             username_field.send_keys(self.username)
             username_field.send_keys(Keys.RETURN)
@@ -158,7 +160,9 @@ class TwitterScraper:
             wait.until(EC.presence_of_element_located((By.NAME, "password")))
             password_field = driver.find_element(By.NAME, "password")
             self.random_sleep(
-                interval_1=(2, 4), probability_interval_1=1, probability_interval_2=0.0
+                interval_1=(2, 4),
+                probability_interval_1=1,
+                probability_interval_2=0.0,
             )
             password_field.send_keys(self.password)
             password_field.send_keys(Keys.RETURN)
@@ -169,7 +173,9 @@ class TwitterScraper:
             )
 
         self.random_sleep(
-            interval_1=(4, 6), probability_interval_1=1, probability_interval_2=0.0
+            interval_1=(4, 6),
+            probability_interval_1=1,
+            probability_interval_2=0.0,
         )
 
     def save_cookies(
@@ -177,12 +183,12 @@ class TwitterScraper:
         driver: webdriver.Firefox,
         path: str,
     ) -> None:
-        """
-        Saves cookies after login for future sessions.
+        """Saves cookies after login for future sessions.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
             path (str): Path to the file where cookies should be saved.
+
         """
         cookies = driver.get_cookies()
         with open(path, "w", encoding="utf-8") as file:
@@ -196,9 +202,8 @@ class TwitterScraper:
         interval_3=(25, 35),
         probability_interval_1=0.89,
         probability_interval_2=0.1,
-    ):
-        """
-        Pauses execution for a random time based on specified intervals and probabilities.
+    ) -> None:
+        """Pauses execution for a random time based on specified intervals and probabilities.
 
         Args:
             interval_1 (tuple): The first interval (min, max), default is (3, 8).
@@ -209,6 +214,7 @@ class TwitterScraper:
 
         Probability for interval_3 is implicitly
             1 - (probability_interval_1 + probability_interval_2).
+
         """
         rand_val = random.random()
 
@@ -227,8 +233,7 @@ class TwitterScraper:
         search_query: str = "Bitcoin",
         headless: bool = True,
     ) -> dict[str, list[str]]:
-        """
-        Scrapes tweets using saved cookies and returns the result in a DataFrame.
+        """Scrapes tweets using saved cookies and returns the result in a DataFrame.
 
         Args:
             tweet_count (int): Number of tweets to scrape.
@@ -237,6 +242,7 @@ class TwitterScraper:
 
         Returns:
             pd.DataFrame: DataFrame containing tweet data.
+
         """
         driver = utils.get_driver(headless=headless)
 
@@ -253,26 +259,27 @@ class TwitterScraper:
         self,
         driver: webdriver.Firefox,
     ) -> None:
-        """
-        Loads cookies from a file and refreshes the page. If the file is not found or an error
+        """Loads cookies from a file and refreshes the page. If the file is not found or an error
         occurs, cookies are loaded from an environment variable.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
+
         """
         driver.get("https://www.x.com")
 
         # Check if the cookie file exists
         if os.path.exists(self.cookies_file_path):
-            with open(self.cookies_file_path, "r", encoding="utf-8") as file:
+            with open(self.cookies_file_path, encoding="utf-8") as file:
                 try:
                     cookies = json.load(file)
                     self.logger.info(
-                        f"Cookies successfully loaded from {self.cookies_file_path}"
+                        f"Cookies successfully loaded from {self.cookies_file_path}",
                     )
                 except json.JSONDecodeError:
                     self.logger.handle_exception(
-                        ValueError, f"Invalid JSON format in {self.cookies_file_path}."
+                        ValueError,
+                        f"Invalid JSON format in {self.cookies_file_path}.",
                     )
                     return
         # Check if the cookie file content is provided as an environment variable
@@ -280,7 +287,7 @@ class TwitterScraper:
             try:
                 cookies = json.loads(cookie_file_content)
                 self.logger.info(
-                    "Cookies successfully loaded from environment variable."
+                    "Cookies successfully loaded from environment variable.",
                 )
             except json.JSONDecodeError as e:
                 self.logger.handle_exception(
@@ -303,34 +310,37 @@ class TwitterScraper:
         self.cookies_loaded = True
 
         self.random_sleep(
-            interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0
+            interval_1=(6, 11),
+            probability_interval_1=1,
+            probability_interval_2=0.0,
         )
 
     def _check_authentication(self) -> None:
-        """
-        Checks if authentication details are provided. Raises an AuthenticationError if neither
+        """Checks if authentication details are provided. Raises an AuthenticationError if neither
         cookies nor username/password are available for scraping.
         """
         if not (self.cookies_loaded or (self.username and self.password)):
-            raise AuthenticationError()
+            raise AuthenticationError
 
     def navigate_to_explore(
         self,
         driver: webdriver.Firefox,
     ) -> None:
-        """
-        Navigates to the Twitter explore page and handles any popups.
+        """Navigates to the Twitter explore page and handles any popups.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
+
         """
         # Navigate to the Explore page
         driver.get("https://www.x.com/explore")
         self.random_sleep(
-            interval_1=(6, 11), probability_interval_1=1, probability_interval_2=0.0
+            interval_1=(6, 11),
+            probability_interval_1=1,
+            probability_interval_2=0.0,
         )
         self.logger.debug(
-            f"Page title after loading cookies and navigating to Explore: {driver.title}"
+            f"Page title after loading cookies and navigating to Explore: {driver.title}",
         )
 
         # Handle any popups that may appear
@@ -338,8 +348,8 @@ class TwitterScraper:
             close_button_wait = WebDriverWait(driver, 10)
             close_button = close_button_wait.until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//button[contains(@aria-label, 'Close')]")
-                )
+                    (By.XPATH, "//button[contains(@aria-label, 'Close')]"),
+                ),
             )
             driver.execute_script("arguments[0].click();", close_button)
             self.logger.debug("Close button clicked successfully.")
@@ -361,19 +371,19 @@ class TwitterScraper:
         driver: webdriver.Firefox,
         search_query: str,
     ) -> None:
-        """
-        Performs a search for the given query.
+        """Performs a search for the given query.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
             search_query (str): The search query to look for.
+
         """
         # Search for the query
         try:
             search_bar = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//input[@aria-label='Search query']")
-                )
+                    (By.XPATH, "//input[@aria-label='Search query']"),
+                ),
             )
             search_bar.clear()
             search_bar.send_keys(search_query)
@@ -391,8 +401,8 @@ class TwitterScraper:
                     (
                         By.XPATH,
                         "/html/body/div[1]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[2]/a/div/div/span",
-                    )
-                )
+                    ),
+                ),
             )
             latest_button.click()
             self.logger.info("Clicked on 'Latest'.")
@@ -418,9 +428,8 @@ class TwitterScraper:
         driver: webdriver.Firefox,
         tweet_count: int,
         search_query: str,
-    ) -> dict[str, List[str]]:
-        """
-        Scrapes the specified number of tweets and returns a dictionary of tweet data.
+    ) -> dict[str, list[str]]:
+        """Scrapes the specified number of tweets and returns a dictionary of tweet data.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
@@ -430,6 +439,7 @@ class TwitterScraper:
             dict: Dictionary containing tweet data with keys "Username", "Tweet", "Timestamp",
                 "Likes", "Impressions", "Comments", "Reposts", and "Bookmarks".
                 Each key maps to a list of scraped values for that attribute.
+
         """
         tweets_scraped = 0
         tweet_data = []
@@ -462,18 +472,20 @@ class TwitterScraper:
                             comments,
                             reposts,
                             bookmarks,
-                        ]
+                        ],
                     )
                     tweets_scraped += 1
-                    self.logger.info(f"Scraped tweet {tweets_scraped}/{tweet_count}")
+                    self.logger.info(
+                        f"Scraped tweet {tweets_scraped}/{tweet_count}"
+                    )
 
                 except (NoSuchElementException, TimeoutException) as e:
                     self.logger.warning(
-                        f"Could not find an element in tweet details: {e}"
+                        f"Could not find an element in tweet details: {e}",
                     )
                 except AttributeError as e:
                     self.logger.warning(
-                        f"Attribute missing in tweet details extraction: {e}"
+                        f"Attribute missing in tweet details extraction: {e}",
                     )
 
             self.random_sleep(
@@ -484,28 +496,34 @@ class TwitterScraper:
 
             # Scroll to the bottom of the page to load more tweets
             for _ in range(3):
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                driver.execute_script(
+                    "window.scrollTo(0, document.body.scrollHeight);"
+                )
             self.random_sleep(
-                interval_1=(2, 6), probability_interval_1=1, probability_interval_2=0.0
+                interval_1=(2, 6),
+                probability_interval_1=1,
+                probability_interval_2=0.0,
             )
 
         self.logger.debug("Tweets scraped into dictionary.")
 
         # Return the scraped tweet data as a dictionary
-        return self.create_tweet_data_dict(tweet_data, search_query=search_query)
+        return self.create_tweet_data_dict(
+            tweet_data, search_query=search_query
+        )
 
     def get_tweets(
         self,
         driver: webdriver.Firefox,
-    ) -> List[WebElement]:
-        """
-        Retrieves the list of tweets from the current page.
+    ) -> list[WebElement]:
+        """Retrieves the list of tweets from the current page.
 
         Args:
             driver (webdriver.Firefox): Selenium WebDriver instance.
 
         Returns:
             List[WebElement]: List of tweet elements.
+
         """
         attempts = 0
         max_attempts = 3  # Maximum number of retry attempts
@@ -515,13 +533,13 @@ class TwitterScraper:
                 # Attempt to locate tweet elements
                 return WebDriverWait(driver, 10).until(
                     EC.presence_of_all_elements_located(
-                        (By.XPATH, "//article[@data-testid='tweet']")
-                    )
+                        (By.XPATH, "//article[@data-testid='tweet']"),
+                    ),
                 )
             except TimeoutException:
                 attempts += 1
                 self.logger.warning(
-                    f"Attempt {attempts} of {max_attempts} failed: Timed out while waiting for tweet elements. Retrying..."
+                    f"Attempt {attempts} of {max_attempts} failed: Timed out while waiting for tweet elements. Retrying...",
                 )
                 self.random_sleep(interval_1=(2, 6), probability_interval_1=1)
 
@@ -535,9 +553,8 @@ class TwitterScraper:
     def extract_tweet_details(
         self,
         tweet: WebElement,
-    ) -> Tuple[str, str, str, str, str, str, str, str]:
-        """
-        Extracts details from a tweet such as username, content, timestamp, likes, impressions,
+    ) -> tuple[str, str, str, str, str, str, str, str]:
+        """Extracts details from a tweet such as username, content, timestamp, likes, impressions,
         comments, reposts, and bookmarks.
 
         Args:
@@ -546,6 +563,7 @@ class TwitterScraper:
         Returns:
             Tuple[str, str, str, str, str, str, str, str]: Extracted tweet details
                 (username, content, timestamp, likes, impressions, comments, reposts, bookmarks).
+
         """
         # Put default values in case of missing elements
         username = "Unknown"
@@ -560,18 +578,24 @@ class TwitterScraper:
         # Extract username
         try:
             username = tweet.find_element(
-                By.XPATH, ".//span[contains(text(), '@')]"
+                By.XPATH,
+                ".//span[contains(text(), '@')]",
             ).text
         except NoSuchElementException:
-            self.logger.debug("Username element not found; using default 'Unknown'.")
+            self.logger.debug(
+                "Username element not found; using default 'Unknown'."
+            )
 
         # Extract content
         try:
             content = tweet.find_element(
-                By.XPATH, ".//div[@data-testid='tweetText']"
+                By.XPATH,
+                ".//div[@data-testid='tweetText']",
             ).text
         except NoSuchElementException:
-            self.logger.debug("Content element not found; using empty default.")
+            self.logger.debug(
+                "Content element not found; using empty default."
+            )
 
         # Extract date and time
         try:
@@ -579,12 +603,15 @@ class TwitterScraper:
             if timestamp_ := timestamp_element.get_attribute("datetime"):
                 timestamp = timestamp_
         except NoSuchElementException:
-            self.logger.debug("Timestamp element not found; using default 'N/A'.")
+            self.logger.debug(
+                "Timestamp element not found; using default 'N/A'."
+            )
 
         # Extract likes
         try:
             likes_element = tweet.find_element(
-                By.XPATH, ".//button[@data-testid='like']//span"
+                By.XPATH,
+                ".//button[@data-testid='like']//span",
             )
             likes = likes_element.text or "0"
         except NoSuchElementException:
@@ -593,28 +620,38 @@ class TwitterScraper:
         # Extract impressions
         try:
             impressions_element = tweet.find_element(
-                By.XPATH, ".//a[@aria-label][contains(@aria-label, 'views')]//span"
+                By.XPATH,
+                ".//a[@aria-label][contains(@aria-label, 'views')]//span",
             )
             impressions = impressions_element.text or "0"
         except NoSuchElementException:
-            self.logger.debug("Impressions element not found; defaulting to 0.")
+            self.logger.debug(
+                "Impressions element not found; defaulting to 0."
+            )
 
         # Check for missing values and update from aria-label if necessary
         try:
             if aria_label := tweet.find_element(
-                By.XPATH, ".//div[@role='group']"
+                By.XPATH,
+                ".//div[@role='group']",
             ).get_attribute("aria-label"):
                 if comments == "0":  # Update comments if default
-                    if match := re.search(r"(\d+(?:,\d+)*) replies", aria_label):
+                    if match := re.search(
+                        r"(\d+(?:,\d+)*) replies", aria_label
+                    ):
                         comments = match[1].replace(",", "")
                 if reposts == "0":  # Update reposts if default
-                    if match := re.search(r"(\d+(?:,\d+)*) reposts", aria_label):
+                    if match := re.search(
+                        r"(\d+(?:,\d+)*) reposts", aria_label
+                    ):
                         reposts = match[1].replace(",", "")
                 if likes == "0":  # Update likes if default
                     if match := re.search(r"(\d+(?:,\d+)*) likes", aria_label):
                         likes = match[1].replace(",", "")
                 if bookmarks == "0":  # Update bookmarks if default
-                    if match := re.search(r"(\d+(?:,\d+)*) bookmarks", aria_label):
+                    if match := re.search(
+                        r"(\d+(?:,\d+)*) bookmarks", aria_label
+                    ):
                         bookmarks = match[1].replace(",", "")
                 if impressions == "0":  # Update impressions if default
                     if match := re.search(r"(\d+(?:,\d+)*) views", aria_label):
@@ -624,7 +661,7 @@ class TwitterScraper:
 
         except (NoSuchElementException, AttributeError):
             self.logger.debug(
-                "Failed to parse some values from aria-label; using defaults where necessary."
+                "Failed to parse some values from aria-label; using defaults where necessary.",
             )
 
         return (
@@ -639,26 +676,26 @@ class TwitterScraper:
         )
 
     def parse_count(self, value: str) -> float:
-        """
-        Convert count strings like '1k' or '2.5k' to integer values, rounding if necessary.
+        """Convert count strings like '1k' or '2.5k' to integer values, rounding if necessary.
 
         Args:
             value (str): The string to convert.
 
         Returns:
             int: The integer representation of the count.
+
         """
-        value = value.lower()  # Handle both uppercase and lowercase abbreviations
+        value = (
+            value.lower()
+        )  # Handle both uppercase and lowercase abbreviations
         if "k" in value:
             return float(value.replace("k", "")) * 1000
-        elif "m" in value:
+        if "m" in value:
             return float(value.replace("m", "")) * 1_000_000
-        else:
-            return float(value)
+        return float(value)
 
     def create_tweet_data_dict(self, tweet_data, search_query="") -> dict:
-        """
-        Create a dictionary for tweet data with an 'id' based on immutable fields only,
+        """Create a dictionary for tweet data with an 'id' based on immutable fields only,
         and converts count fields to integers.
 
         Args:
@@ -668,6 +705,7 @@ class TwitterScraper:
 
         Returns:
             dict: Dictionary containing tweet data with an 'id' based on immutable fields.
+
         """
         # Convert all counts to integers
         processed_data = [
@@ -714,8 +752,7 @@ def scrape_in_blocks(
     logger: Logger,
     headless: bool = True,
 ) -> None:
-    """
-    Scrapes tweets in evenly distributed blocks between start and end dates,
+    """Scrapes tweets in evenly distributed blocks between start and end dates,
     then uploads each block to the database.
 
     Args:
@@ -727,6 +764,7 @@ def scrape_in_blocks(
         total_tweet_count (int): The total number of tweets to scrape.
         db_index (str): The Elasticsearch index to insert the data into.
         logger (Logger): Logger for logging messages.
+
     """
     # Wrap the search query in quotes to ensure it appears in the tweets
     search_query = f'"{search_query}"'
@@ -758,7 +796,7 @@ def scrape_in_blocks(
         # Log the block information
         logger.debug(
             f"Scraping block {i + 1}/{block_count}: {tweets_per_block[i]} tweets "
-            f"from {block_start_date} to {block_end_date}."
+            f"from {block_start_date} to {block_end_date}.",
         )
 
         # Construct Twitter date query format (YYYY-MM-DD)
@@ -766,17 +804,21 @@ def scrape_in_blocks(
 
         # Scrape tweets with cookies and save them to database
         tweets_data = scraper.scrape_with_cookies(
-            tweet_count=tweets_per_block[i], search_query=date_query, headless=headless
+            tweet_count=tweets_per_block[i],
+            search_query=date_query,
+            headless=headless,
         )
         insert_dict(logger, db_index, tweets_data)
         logger.debug(
-            f"Block {i + 1}/{block_count} completed and data inserted into the database."
+            f"Block {i + 1}/{block_count} completed and data inserted into the database.",
         )
 
         time.sleep(random.uniform(3, 6))
 
     final_date_query = f"{search_query} since:{end_date.strftime('%Y-%m-%d')} until:{(end_date + timedelta(days=1)).strftime('%Y-%m-%d')}"
     additional_tweets_data = scraper.scrape_with_cookies(
-        tweet_count=20, search_query=final_date_query, headless=True
+        tweet_count=20,
+        search_query=final_date_query,
+        headless=True,
     )
     insert_dict(logger, db_index, additional_tweets_data)

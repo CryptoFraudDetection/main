@@ -1,20 +1,16 @@
-"""
-This module contains the tests for the scraper.twitter module.
-"""
+"""This module contains the tests for the scraper.twitter module."""
 
 import pytest
 
-from CryptoFraudDetection.utils.logger import Logger
 from CryptoFraudDetection.scraper.twitter import TwitterScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
+from CryptoFraudDetection.utils.logger import Logger
 
 logger_ = Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="/logs")
 
 
-def test_initialization():
-    """
-    Test the initialization of the TwitterScraper class with and without credentials.
-    """
+def test_initialization() -> None:
+    """Test the initialization of the TwitterScraper class with and without credentials."""
     # Test with credentials
     username = "test_user"
     password = "test_pass"
@@ -36,11 +32,11 @@ def test_initialization():
     assert scraper_without_credentials.cookies_file_path == ""
 
 
-@pytest.mark.xfail(reason="Often fails due to being detected as a bot by Twitter")
-def test_scrape_with_cookies():
-    """
-    Test the scrape_with_cookies method of the TwitterScraper class
-    """
+@pytest.mark.xfail(
+    reason="Often fails due to being detected as a bot by Twitter"
+)
+def test_scrape_with_cookies() -> None:
+    """Test the scrape_with_cookies method of the TwitterScraper class."""
     scraper = TwitterScraper(
         username="test_user",
         password="test_pass",
@@ -48,7 +44,9 @@ def test_scrape_with_cookies():
         logger=logger_,
     )
     tweets_data = scraper.scrape_with_cookies(
-        tweet_count=1, search_query="Bitcoin", headless=True
+        tweet_count=1,
+        search_query="Bitcoin",
+        headless=True,
     )
 
     # Verify that there is at least one tweet in the data
