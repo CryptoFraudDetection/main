@@ -2,6 +2,8 @@
 jupyter: python3
 ---
 
+This notebooks was used to find out which subreddits are most associated with each coin.
+
 ```{python}
 import os
 import praw

@@ -53,13 +53,13 @@ def insert_dataframe(
         ]
 
     try:
-        success_fail = bulk(client=es, actions=data, raise_on_error=False)
+        response = bulk(client=es, actions=data, raise_on_error=False)
     except BulkIndexError as e:
         logger.handle_exception(
             BulkIndexError,
             f"Skipped some documents:\n{e}",
         )
-    return success_fail
+    return response
 
 
 def insert_dict(

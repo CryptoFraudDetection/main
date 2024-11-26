@@ -35,6 +35,7 @@ dependencies = [
     "matplotlib==3.9.2",
     "seaborn==0.13.2",
     "ruff==0.8.0",
+    "beautifulsoup4==4.12.3",
 ]
 
 [project.urls]
