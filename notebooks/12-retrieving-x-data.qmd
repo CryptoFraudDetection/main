@@ -1,0 +1,87 @@
+---
+jupyter: python3
+---
+
+```{python}
+import pandas as pd
+from tqdm import tqdm
+
+from CryptoFraudDetection.utils.logger import Logger
+from CryptoFraudDetection.utils.enums import LoggerMode
+from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dataframe
+```
+
+```{python}
+index = 'x'
+q = '*'
+size = 20000
+```
+
+```{python}
+response = search_data(index=index, q=q, size=size)
+```
+
+```{python}
+hits = response['hits']['hits']
+```
+
+```{python}
+data = [hit['_source'] for hit in hits]
+```
+
+```{python}
+df = pd.DataFrame(data)
+```
+
+```{python}
+df
+```
+
+```{python}
+
+print(df.isnull().sum())
+```
+
+```{python}
+#make all NaN values in SearchKeyword to "Bitcoin" 
+# because they are from an first scrape attempt with only "Bitcoin" as search keyword but there was no SearchKeyword Column in the data
+# and why deleting data if we can keep it :)
+df['SearchKeyword'] = df['SearchKeyword'].fillna('"Bitcoin"')
+```
+
+```{python}
+print(df.isnull().sum())
+```
+
+```{python}
+#delete id column we dont need it anymore
+df = df.drop(columns=['id'])
+```
+
+```{python}
+# only keep the search keyword in the SearchKeyword column not the whole search query
+df['SearchKeyword'] = df['SearchKeyword'].str.extract(r'"([^"]+)"', expand=False)
+df
+```
+
+```{python}
+#all column names low
+df.columns = map(str.lower, df.columns)
+
+#all unique values in searchkeyword
+unique_values = df['searchkeyword'].unique()
+unique_values
+```
+
+```{python}
+#print all nan in searchkeyword
+df[df['searchkeyword'].isnull()]
+```
+
+```{python}
+
+# DataFrame to parquet file
+df.to_parquet('../data/processed/x_posts.parquet', index=False)
+```
+
