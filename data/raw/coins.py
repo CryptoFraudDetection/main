@@ -219,7 +219,7 @@ coins = [
         "test": False,
         "max_market_cap_e9": 0.0,
         "start_date": "2022-06-28",
-        "end_date": "2023-12-31",
+        "end_date": "2022-07-21",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
