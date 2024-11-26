@@ -7,6 +7,8 @@ title: Scrape Reddit Posts
 ```{python}
 import pandas as pd
 import matplotlib.pyplot as plt
+import yfinance as yf
+
 ```
 
 ```{python}
@@ -26,17 +28,109 @@ grouped = df.groupby(['date', 'search_query']).size().reset_index(name='count')
 pivot_df = grouped.pivot(index='date', columns='search_query', values='count').fillna(0)
 ```
 ```{python}
+def plot_pivot_df(pivot_df):
+    num_plots = len(pivot_df.columns)
+    fig, axes = plt.subplots(
+        nrows=num_plots, ncols=1, figsize=(10, num_plots * 3), sharex=True
+    )
 
-fig, axes = plt.subplots(nrows=len(pivot_df.columns), ncols=1, figsize=(10, len(pivot_df.columns) * 3), sharex=True)
+    
+    if num_plots == 1:
+        axes = [axes]
 
-for idx, (query, data) in enumerate(pivot_df.items()):
-    ax = axes[idx]
-    ax.plot(data.index, data.values, label=query)
-    ax.set_title(f"Search Query: {query}")
-    ax.set_ylabel('Anzahl der Einträge')
-    ax.legend(loc='upper left')
-    ax.grid(True)
+    for idx, (query, data) in enumerate(pivot_df.items()):
+        ax = axes[idx]
+        ax.plot(data.index, data.values, label=query)
+        ax.set_title(f"Search Query: {query}")
+        ax.set_ylabel('Anzahl der Einträge')
+        ax.legend(loc='upper left')
+        ax.grid(True)
 
+    plt.xlabel('Datum')
+    plt.tight_layout()
+    plt.show()
+
+
+plot_pivot_df(pivot_df)
+```
+```{python}
+exclude_coins_testset = ['Ethereum', 'Cosmos', 'FTX Token', 'Safe Moon']
+
+filtered_queries = [query for query in pivot_df.columns if query not in exclude_coins_testset]
+
+print("Coins ohne testset: "  + filtered_queries)
+```
+```{python}
+# mapp coins for yfinance
+ticker_mapping = {
+    'Avalanche': 'AVAX-USD',
+    'BeerCoin': None,          # BeerCoin not on yfinance
+    'BitForex': None,          # BitForex no coin
+    'Bitcoin': 'BTC-USD',
+    'ChainLink': 'LINK-USD',
+    'THORChain': 'RUNE-USD',
+    'Teddy Doge': None,        # not found
+    'Terra Luna': 'LUNA-USD' 
+}
+
+available_queries = [query for query in filtered_queries if ticker_mapping.get(query) is not None]
+print("Verfügbare Suchanfragen mit Tickersymbolen:", available_queries)
+```
+```{python}
+# save coindata from yfinance
+coin_data_dict = {}
+
+for query in available_queries:
+    ticker = ticker_mapping[query]
+    try:
+        data = pivot_df[query]
+        start_date = min(data.index).strftime('%Y-%m-%d')
+        end_date = max(data.index).strftime('%Y-%m-%d')
+        coin_data = yf.download(ticker, start=start_date, end=end_date)
+        if not coin_data.empty:
+            coin_data_dict[query] = coin_data
+        else:
+            coin_data_dict[query] = None  
+    except Exception as e:
+        coin_data_dict[query] = None
+
+```
+```{python}
+num_queries = len(available_queries)
+fig, axes = plt.subplots(nrows=num_queries, ncols=2, figsize=(15, num_queries * 4), sharex='col')
+
+for idx, query in enumerate(available_queries):
+    data = pivot_df[query]
+    # Subplot 1: Anzahl der Einträge
+    if num_queries > 1:
+        ax1 = axes[idx, 0]
+    else:
+        ax1 = axes[0]
+    ax1.plot(data.index, data.values, label=f'Einträge: {query}')
+    ax1.set_title(f"Suchanfrage: {query} - Anzahl der Einträge")
+    ax1.set_ylabel('Anzahl der Einträge')
+    ax1.legend(loc='upper left')
+    ax1.grid(True)
+
+    # Subplot 2: Historische Preise (Coin-Daten)
+    if num_queries > 1:
+        ax2 = axes[idx, 1]
+    else:
+        ax2 = axes[1]
+    coin_data = coin_data_dict.get(query)
+    if coin_data is not None:
+        ax2.plot(coin_data.index, coin_data['Close'], label=f'{query} Preis')
+        ax2.set_title(f"Suchanfrage: {query} - Historische Preise")
+        ax2.set_ylabel('Preis (USD)')
+        ax2.legend(loc='upper left')
+        ax2.grid(True)
+    else:
+        ax2.text(0.5, 0.5, f'Keine Preisdaten für {query}', ha='center', va='center', transform=ax2.transAxes)
+        ax2.set_title(f"Suchanfrage: {query} - Keine Preisdaten verfügbar")
+        ax2.set_xticks([])
+        ax2.set_yticks([])
+
+# Gemeinsame X-Achse
 plt.xlabel('Datum')
 plt.tight_layout()
 plt.show()
