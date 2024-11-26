@@ -2,12 +2,14 @@
 This module contains the tests for the scraper.comparitech module.
 """
 
+import os
+import pytest
+
 import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.scraper.reddit import RedditScraper
 from CryptoFraudDetection.utils.enums import LoggerMode
 
 logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
-
 
 def test_initialization():
     """
@@ -19,6 +21,10 @@ def test_initialization():
     finally:
         scraper.quit()
 
+@pytest.mark.xfail(
+    condition=os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Fails on GitHub due to headless browser issues or anti-bot measures",
+)
 def test__extract_all_comments():
     """
     Test the _extract_comments method of the RedditScraper class
@@ -40,6 +46,10 @@ def test__extract_all_comments():
     finally:
         scraper.quit()
 
+@pytest.mark.xfail(
+    condition=os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Fails on GitHub due to headless browser issues or anti-bot measures",
+)
 def test_scrape_post_content():
     """
     Test the scrape_post_content method of the RedditScraper class
@@ -55,6 +65,10 @@ def test_scrape_post_content():
     finally:
         scraper.quit()
 
+@pytest.mark.xfail(
+    condition=os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Fails on GitHub due to headless browser issues or anti-bot measures",
+)
 def test_get_multipage_post_list():
     """
     Test the get_multipage_post_list method of the RedditScraper class
@@ -68,6 +82,10 @@ def test_get_multipage_post_list():
     finally:
         scraper.quit()
 
+@pytest.mark.xfail(
+    condition=os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Fails on GitHub due to headless browser issues or anti-bot measures",
+)
 def test_get_multipage_post_list_with_start_date():
     try:
         scraper = RedditScraper(logger_, max_search_limit=2)
@@ -78,7 +96,10 @@ def test_get_multipage_post_list_with_start_date():
     finally:
         scraper.quit()
 
-
+@pytest.mark.xfail(
+    condition=os.getenv("GITHUB_ACTIONS") == "true",
+    reason="Fails on GitHub due to headless browser issues or anti-bot measures",
+)
 def test_scrape():
     """
     Test the RedditScraper class
