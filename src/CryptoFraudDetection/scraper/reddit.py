@@ -287,13 +287,15 @@ class RedditScraper:
             self._logger.error(f"Error loading post URL {post['url']}: {e}")
             return post
         
-        post_text_xpath = './/div[contains(@class, "md")]'
-        try:
-            post_text_div = post_entry.find_element(By.XPATH, post_text_xpath)
-            post["text"] = post_text_div.text
-        except NoSuchElementException:
+        if post_entry:
+            post_text_xpath = './/div[contains(@class, "md")]'
+            try:
+                post_text_div = post_entry.find_element(By.XPATH, post_text_xpath)
+                post["text"] = post_text_div.text
+            except NoSuchElementException:
+                post["text"] = ''
+        else:
             post["text"] = ''
-        
         post["children"] = self._extract_all_comments()
         
         return post
