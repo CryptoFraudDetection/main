@@ -1,0 +1,256 @@
+[
+    {
+        "name": "Bitcoin",
+        "symbol": "BTC",
+        "fraud": false,
+        "test": false,
+        "max_market_cap_e9": 1800.0,
+        "start_date": "2010-07-14",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "Bitcoin",
+            "wallstreetbets",
+            "Superstonk"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "fraud": false,
+        "test": true,
+        "max_market_cap_e9": 550.0,
+        "start_date": "2015-08-08",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "ethereum",
+            "ethtrader",
+            "Superstonk"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "Terra Luna",
+        "symbol": "LUNC",
+        "fraud": true,
+        "test": false,
+        "max_market_cap_e9": 41.0,
+        "start_date": "2019-07-07",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "terraluna",
+            "CryptoCurrencyClassic",
+            "Crypto_General",
+            "LunaClassic",
+            "Gemini"
+        ],
+        "end_date": "2022-05-08"
+    },
+    {
+        "name": "Avalanche",
+        "symbol": "AVAX",
+        "fraud": false,
+        "test": false,
+        "max_market_cap_e9": 30.0,
+        "start_date": "2020-09-23",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "Avax",
+            "CryptoBreakingDotCom",
+            "Thecoinrise",
+            "Crypto_General",
+            "CryptoCurrencyClassic",
+            "cryptonewsland"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "Cosmos",
+        "symbol": "ATOM",
+        "fraud": false,
+        "test": true,
+        "max_market_cap_e9": 11.0,
+        "start_date": "2019-03-15",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "cosmosnetwork",
+            "CoinBase",
+            "CryptoBreakingDotCom",
+            "CryptoEducationHub",
+            "Blofin",
+            "ledgerwallet",
+            "kryptomaniak"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "Chainlink",
+        "symbol": "LINK",
+        "fraud": false,
+        "test": false,
+        "max_market_cap_e9": 9.9,
+        "start_date": "2017-10-01",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "ethtrader",
+            "Chainlink",
+            "ethereum",
+            "LINKTrader"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "FTX Token",
+        "symbol": "FTT",
+        "fraud": true,
+        "test": true,
+        "max_market_cap_e9": 9.5,
+        "start_date": "2019-08-01",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "Superstonk",
+            "Nexo",
+            "SafeMoon",
+            "ftx"
+        ],
+        "end_date": "2022-11-07"
+    },
+    {
+        "name": "THORChain",
+        "symbol": "RUNE",
+        "fraud": false,
+        "test": false,
+        "max_market_cap_e9": 1.8,
+        "start_date": "2019-07-24",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "getagraph",
+            "THORChain",
+            "Monero",
+            "cosmosnetwork",
+            "cryptoloversclub",
+            "lolacoin",
+            "CryptoBreakingDotCom",
+            "Crypto_General"
+        ],
+        "end_date": null
+    },
+    {
+        "name": "BeerCoin",
+        "symbol": "BEER",
+        "fraud": true,
+        "test": false,
+        "max_market_cap_e9": 0.31,
+        "start_date": "2024-05-27",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "wallstreetbetsGER",
+            "memecoins",
+            "Kryptostrassenwetten",
+            "SolCoins",
+            "bitpanda",
+            "Memecoinhub"
+        ],
+        "end_date": "2024-06-24"
+    },
+    {
+        "name": "BitForex",
+        "symbol": "BF",
+        "fraud": true,
+        "test": false,
+        "max_market_cap_e9": 0.057,
+        "start_date": "2019-08-31",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "ecomi",
+            "CryptoExchange",
+            "SafeMoon",
+            "BitForex",
+            "Superstonk",
+            "CryptoCurrencyClassic"
+        ],
+        "end_date": "2024-03-05"
+    },
+    {
+        "name": "Safe Moon",
+        "symbol": "SAFEMOON",
+        "fraud": true,
+        "test": true,
+        "max_market_cap_e9": 0.0,
+        "start_date": "2022-01-17",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "SafeMoon"
+        ],
+        "end_date": "2023-10-31"
+    },
+    {
+        "name": "Teddy Doge",
+        "symbol": "TEDDY V2",
+        "fraud": true,
+        "test": false,
+        "max_market_cap_e9": 0.0,
+        "start_date": "2022-06-28",
+        "subreddits": [
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto",
+            "coinmarketbag",
+            "cryptopricesalerts",
+            "CoinMarketDo",
+            "dogecoin",
+            "kryptocal"
+        ],
+        "end_date": "2023-12-31"
+    },
+    {
+        "name": "STOA Network",
+        "symbol": "STA",
+        "fraud": true,
+        "test": false,
+        "max_market_cap_e9": 0.0,
+        "start_date": "2021-12-28",
+        "subreddits": [
+            "BitMartExchange",
+            "CryptoCurrency",
+            "CryptoMoonShots",
+            "CryptoMarkets",
+            "Crypto"
+        ],
+        "end_date": "2022-07-17"
+    }
+]

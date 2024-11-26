@@ -29,9 +29,20 @@ dependencies = [
     "torch==2.5.0",
     "wandb==0.18.5",
     "python-dotenv==1.0.1",
+    "praw==7.8.1",
+    "tqdm==4.67.0",
+    "altair==5.4.1",
+    "matplotlib==3.9.2",
+    "seaborn==0.13.2",
+    "ruff==0.8.0",
     "beautifulsoup4==4.12.3",
 ]
 
 [project.urls]
 Homepage = "https://github.com/CryptoFraudDetection/main"
 Issues = "https://github.com/CryptoFraudDetection/main/issues"
+
+[tool.ruff]
+line-length = 79
+lint.select = ["ALL",]
+lint.exclude = ["D211","D104",]

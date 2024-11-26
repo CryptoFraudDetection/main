@@ -169,7 +169,13 @@ wandb
 
 # cookies
 cookies/
-cookies_x_1_0.json
 
 # Ignore Jupyter notebooks
 *.ipynb
+
+# PyCharm ignore
+.idea/
+
+# Data
+data/processed/*.csv
+data/processed/*.parquet

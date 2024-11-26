@@ -1,0 +1,139 @@
+---
+jupyter: python3
+---
+
+```{python}
+import os
+import time
+import json
+import datetime
+from pprint import pprint
+
+
+import praw
+import praw.models
+import praw.models.comment_forest
+import pandas as pd
+from prawcore.exceptions import TooManyRequests
+from dotenv import load_dotenv, find_dotenv
+
+from CryptoFraudDetection.utils.logger import Logger
+from CryptoFraudDetection.utils.enums import LoggerMode
+from CryptoFraudDetection.elasticsearch.data_retrieval import search_data
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dataframe
+
+logger_ = Logger(
+    name="scrape_reddit_posts", level=LoggerMode.DEBUG, log_dir="../logs"
+)
+
+# Load environment variables
+dotenv_path = find_dotenv()
+if dotenv_path and os.getenv("REDDIT_CLIENT_ID") is None:
+    load_dotenv(dotenv_path)
+
+# Initialize the Reddit API client
+reddit = praw.Reddit(
+    client_id=os.getenv("REDDIT_CLIENT_ID"),
+    client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+    user_agent=os.getenv("REDDIT_USER_AGENT"),
+)
+```
+
+```{python}
+def convert_unix_date(date: str) -> str:
+    if date is False:
+        return None
+    return datetime.datetime.fromtimestamp(date, datetime.timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+def serialize_comment(comments: praw.models.comment_forest.CommentForest, search_query: str) -> dict:
+    serialized_comments = []
+    for comment in comments:
+        serialized_replies = serialize_comment(comment.replies, search_query)
+        serialized_comments.append(
+            {
+                "author": str(comment.author),
+                "body": comment.body,
+                "comments": serialized_replies if serialized_replies else None,
+                "created": convert_unix_date(comment.created_utc),
+                "edited": convert_unix_date(comment.edited),
+                "depth": comment.depth,
+                "downs": comment.downs,
+                "id": comment.id,
+                "score": comment.score,
+                "search_query": search_query,
+                "subreddit": comment.subreddit_name_prefixed,
+                "ups": comment.ups,
+            }
+        )
+    return serialized_comments
+
+
+def serialize_submission(post: praw.models.Submission, search_query: str) -> dict:
+    return {
+        "author": str(post.author),
+        "body": post.selftext,
+        "comments": serialize_comment(post.comments, search_query),
+        "created": convert_unix_date(post.created_utc),
+        "edited": convert_unix_date(post.edited),
+        "depth": -1,
+        "downs": post.downs,
+        "id": post.id,
+        "num_comments": post.num_comments,  # not available in comments
+        "score": post.score,
+        "search_query": search_query,
+        "subreddit": post.subreddit_name_prefixed,
+        "title": post.title,  # not available in comments
+        "ups": post.ups,
+        "url": post.url,  # not available in comments
+    }
+```
+
+```{python}
+max_results = 10_000
+response = search_data("reddit_metadata_100", "*", max_results).body["hits"]["hits"]
+```
+
+```{python}
+for result in response:
+    scrape_successful = False
+    while not scrape_successful:
+        try:
+            extracted_source = result["_source"]
+            post_id = extracted_source["link"].split("/")[6]
+            search_query = extracted_source["query"].split("site:reddit.com/r/")[0].strip()
+            if len(post_id) not in (6,7):
+                scrape_successful = True
+                continue
+
+            post = reddit.submission(id=post_id)
+            post.comments.replace_more(limit=5)
+            serialized_post = serialize_submission(post, search_query)
+            serialized_post_df = pd.DataFrame.from_dict(serialized_post, orient='index').T
+
+            insert_dataframe(logger=logger_, index="reddit_posts_100", df=serialized_post_df)
+            logger_.info(f"Inserted post {post_id} into Elasticsearch")
+            time.sleep(1)
+            scrape_successful = True
+
+        except IndexError:
+            scrape_successful = True
+            continue # Not a post
+
+        except TimeoutError:
+            logger_.error("Probably elasticsearch is down, sleeping for 2 minutes")
+            time.sleep(120)
+
+        except TooManyRequests:
+            logger_.error("Too many requests, sleeping for 2 minutes")
+            time.sleep(120)
+            continue
+
+        except Exception as e:
+            logger_.error(f"Another error: {e}")
+            time.sleep(1)
+            continue
+```
+
