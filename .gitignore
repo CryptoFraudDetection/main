@@ -169,3 +169,10 @@ wandb
 
 # cookies
 data/raw/cookies/*.json
+
+# PyCharm ignore
+.idea/
+
+# Data
+data/processed/*.csv
+data/processed/*.parquet

@@ -1,5 +1,4 @@
-"""
-File: comparitech.py
+"""File: comparitech.py.
 
 Description:
     A web scraper for extracting cryptocurrency scam data from Comparitech's Crypto Scam List.
@@ -8,17 +7,17 @@ Description:
 """
 
 from collections import defaultdict
-from typing import Dict, List
+
 from selenium.common.exceptions import (
     JavascriptException,
+    StaleElementReferenceException,
     TimeoutException,
     WebDriverException,
-    StaleElementReferenceException,
 )
-from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from CryptoFraudDetection.scraper import utils
 from CryptoFraudDetection.utils.logger import Logger
@@ -40,6 +39,7 @@ class ComparitechScraper:
         >>> logger = Logger("crypto_scraper")
         >>> scraper = ComparitechScraper(logger)
         >>> data = scraper.get_data(headless=True)
+
     """
 
     def __init__(
@@ -56,6 +56,7 @@ class ComparitechScraper:
             base_url: Base URL for the Comparitech Crypto Scam List
             page_load_timeout: Maximum time in seconds to wait for page loads
             element_wait_timeout: Maximum time in seconds to wait for elements to appear
+
         """
         self.logger = logger
         self.base_url = base_url
@@ -66,7 +67,7 @@ class ComparitechScraper:
         self,
         headless: bool = True,
         test_run: bool = False,
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """Execute the scraping process and return collected data.
 
         Args:
@@ -81,9 +82,10 @@ class ComparitechScraper:
         Raises:
             WebDriverException: If there are issues with browser initialization or control
             TimeoutException: If the page fails to load within the specified timeout
+
         """
         driver = None
-        data: Dict[str, List[str]] = {}
+        data: dict[str, list[str]] = {}
         try:
             # Initialize the WebDriver with appropriate settings
             self.logger.info("Initializing web driver")
@@ -95,7 +97,8 @@ class ComparitechScraper:
 
         except WebDriverException as e:
             self.logger.handle_exception(
-                WebDriverException, f"Failed to initialize or use WebDriver: {str(e)}"
+                WebDriverException,
+                f"Failed to initialize or use WebDriver: {e!s}",
             )
 
         # Close the WebDriver instance after scraping
@@ -107,7 +110,7 @@ class ComparitechScraper:
                 except WebDriverException as e:
                     self.logger.handle_exception(
                         WebDriverException,
-                        f"Error closing WebDriver: {str(e)}",
+                        f"Error closing WebDriver: {e!s}",
                         "warning",
                     )
 
@@ -117,7 +120,7 @@ class ComparitechScraper:
         self,
         driver: WebDriver,
         test_run: bool,
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """Perform the main scraping operation.
 
         Navigates through all pages of the table, collecting data from each page
@@ -135,6 +138,7 @@ class ComparitechScraper:
             TimeoutException: If page loading times out
             WebDriverException: For other WebDriver related errors
             StaleElementReferenceException: If page elements become stale during scraping
+
         """
         try:
             # Navigate to the target URL
@@ -144,17 +148,17 @@ class ComparitechScraper:
         except TimeoutException as e:
             self.logger.handle_exception(
                 TimeoutException,
-                f"Failed to load the initial page - timeout: {str(e)}",
+                f"Failed to load the initial page - timeout: {e!s}",
             )
 
         except WebDriverException as e:
             self.logger.handle_exception(
                 WebDriverException,
-                f"Failed to navigate to URL: {str(e)}",
+                f"Failed to navigate to URL: {e!s}",
             )
 
         # Initialize result storage and page counter
-        results: Dict[str, List[str]] = defaultdict(list)
+        results: dict[str, list[str]] = defaultdict(list)
         page_num = 0
 
         while True:
@@ -185,7 +189,7 @@ class ComparitechScraper:
         self.logger.info(f"Completed scraping {page_num} pages")
         return dict(results)
 
-    def _extract_results(self, driver: WebDriver) -> Dict[str, List[str]]:
+    def _extract_results(self, driver: WebDriver) -> dict[str, list[str]]:
         """Extract data from the current page's table.
 
         Locates the table on the current page and extracts all cell values,
@@ -201,14 +205,15 @@ class ComparitechScraper:
         Raises:
             TimeoutException: If table elements don't load within timeout
             StaleElementReferenceException: If elements become stale during processing
+
         """
-        results: Dict[str, List[str]] = defaultdict(list)
+        results: dict[str, list[str]] = defaultdict(list)
 
         try:
             # Wait for table to become available in the DOM
             self.logger.debug("Waiting for table to load")
             table = WebDriverWait(driver, self.element_wait_timeout).until(
-                EC.presence_of_element_located((By.TAG_NAME, "table"))
+                EC.presence_of_element_located((By.TAG_NAME, "table")),
             )
 
             # Extract and validate table headers
@@ -238,13 +243,14 @@ class ComparitechScraper:
 
         except TimeoutException as e:
             self.logger.handle_exception(
-                TimeoutException, f"Timeout waiting for table to load: {str(e)}"
+                TimeoutException,
+                f"Timeout waiting for table to load: {e!s}",
             )
 
         except StaleElementReferenceException as e:
             self.logger.handle_exception(
                 StaleElementReferenceException,
-                f"Elements became stale during extraction: {str(e)}",
+                f"Elements became stale during extraction: {e!s}",
             )
 
         return results
@@ -261,11 +267,14 @@ class ComparitechScraper:
         Returns:
             True if successfully navigated to next page, False if at last page
             or if navigation fails
+
         """
         try:
             # Attempt to click the next page button using JavaScript
             self.logger.debug("Attempting to click next page button")
-            driver.execute_script("document.querySelector('button.next').click()")
+            driver.execute_script(
+                "document.querySelector('button.next').click()"
+            )
             return True
 
         except JavascriptException:
