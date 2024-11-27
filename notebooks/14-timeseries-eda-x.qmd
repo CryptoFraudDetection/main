@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import json
+import numpy as np
 ```
 
 ```{python}
 df = pd.read_parquet("../data/processed/x_posts.parquet")
+df['timestamp'] = pd.to_datetime(df['timestamp'])
 df.head(5)
 ```
 
@@ -85,5 +87,60 @@ plt.tight_layout()
 plt.suptitle('Count of Search Keywords over Time', y=1.02)
 plt.subplots_adjust(hspace=0.3)
 plt.show()
+```
+
+```{python}
+#cut out coins of test data
+test_coins = ['Ethereum', '$Atom', '$FTT', 'Safemoon']
+
+df_train = df[~df['searchkeyword'].isin(test_coins)]
+df_train
+```
+
+```{python}
+words_list = ['moon', 'mooon', 'to 0', 'to zero', 'scam', 'fraud', 'rug', 'rugpull', 'pump', 'dump', 'rich', 'poor', 'millionaire', 'billionaire']
+```
+
+```{python}
+
+
+# Function to generate heatmaps
+def create_heatmaps(df, words_list):
+    for keyword in df['searchkeyword'].unique():
+        subset = df[df['searchkeyword'] == keyword]
+        
+        start_date = subset['timestamp'].min().date() - pd.Timedelta(days=10)
+        end_date = subset['timestamp'].max().date() + pd.Timedelta(days=10)
+        all_dates = pd.date_range(start_date, end_date).date
+        
+        heatmap_data = pd.DataFrame(0, index=words_list, columns=all_dates)
+        
+        for _, row in subset.iterrows():
+            tweet_date = row['timestamp'].date()
+            for word in words_list:
+                if word in row['tweet'].lower():
+                    heatmap_data.at[word, tweet_date] += 1
+
+        for date in all_dates:
+            if date not in heatmap_data.columns:
+                heatmap_data[date] = 0
+        
+        plt.figure(figsize=(12, 6), facecolor='white')
+        plt.title(f"Heatmap for Searchkeyword: {keyword}", fontsize=14)
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel("Words", fontsize=12)
+
+        xticks_indices = np.linspace(0, len(all_dates) - 1, min(10, len(all_dates))).astype(int)
+        xticks_labels = [all_dates[i] for i in xticks_indices]
+        
+        plt.xticks(xticks_indices, xticks_labels, rotation=45, fontsize=10)
+        plt.yticks(range(len(words_list)), words_list, fontsize=10)
+        
+        plt.imshow(heatmap_data, aspect='auto', cmap='viridis', interpolation='nearest', origin='lower')
+        plt.colorbar(label='Frequency', orientation='vertical')
+        plt.tight_layout()
+        plt.show()
+
+create_heatmaps(df_train, words_list)
 ```
 
