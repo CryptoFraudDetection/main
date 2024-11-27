@@ -34,7 +34,7 @@ def test__extract_all_comments():
         scraper.start_driver()
         url = 'https://old.reddit.com/r/Fire/comments/11lfj4e/lost_400000_my_whole_net_worth_to_the_terra_luna/'
         scraper.scrape_post_content({'url': url})
-        comments = scraper._extract_all_comments()
+        comments = scraper._extract_comments()
         assert isinstance(comments, list)
         assert len(comments) > 0
         for comment in comments:
@@ -104,16 +104,19 @@ def test_scrape():
     """
     Test the RedditScraper class
     """
-    scraper = RedditScraper(logger_)
-    scraper.start_driver()
-    df = scraper.scrape('r/CryptoCurrency', 'Terra Luna', limit=101)
-    assert df is not None
-    assert len(df) == 101
+    try:
+        scraper = RedditScraper(logger_)
+        scraper.start_driver()
+        df = scraper.scrape('r/CryptoCurrency', 'Terra Luna', limit=101)
+        assert df is not None
+        assert len(df) == 101
+    finally:
+        scraper.quit()
     
 if __name__ == '__main__':
-    # test_initialization()
-    # test__extract_all_comments()
-    # test_scrape_post_content()
-    # test_get_multipage_post_list()
-    # test_get_multipage_post_list_with_start_date()
+    test_initialization()
+    test__extract_all_comments()
+    test_scrape_post_content()
+    test_get_multipage_post_list()
+    test_get_multipage_post_list_with_start_date()
     test_scrape()
