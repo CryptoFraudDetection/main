@@ -5,7 +5,7 @@ coins = [
         "fraud": False,
         "test": False,
         "max_market_cap_e9": 1_800.0,
-        "start_date": "2010-07-14",
+        "start_date": "2014-11-01",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -22,7 +22,7 @@ coins = [
         "fraud": False,
         "test": True,
         "max_market_cap_e9": 550.0,
-        "start_date": "2015-08-08",
+        "start_date": "2016-02-18",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",

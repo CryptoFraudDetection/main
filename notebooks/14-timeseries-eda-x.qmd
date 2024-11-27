@@ -1,0 +1,89 @@
+---
+jupyter: python3
+---
+
+```{python}
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import json
+```
+
+```{python}
+df = pd.read_parquet("../data/processed/x_posts.parquet")
+df.head(5)
+```
+
+```{python}
+with open('../data/raw/coins.json', 'r') as f:
+    coins_data = json.load(f)
+
+coin_to_dates = {}
+for coin in coins_data:
+    coin_name = coin['name']
+    start_date_str = coin['start_date']
+    end_date_str = coin['end_date'] or '2024-11-01'
+    start_date = pd.to_datetime(start_date_str)
+    end_date = pd.to_datetime(end_date_str)
+    coin_to_dates[coin_name] = (start_date, end_date)
+
+keyword_to_coin = {
+    'Bitcoin': 'Bitcoin',
+    'Ethereum': 'Ethereum',
+    'Chainlink': 'Chainlink',
+    'thorchain': 'THORChain',
+    '$Atom': 'Cosmos',
+    'Bitforex': 'BitForex',
+    '$Avax': 'Avalanche',
+    'Terra Luna': 'Terra Luna',
+    '$FTT': 'FTX Token',
+    'Safemoon': 'Safe Moon',
+    '$STA': 'STOA Network',
+    'Beercoin': 'BeerCoin',
+    'Teddy Doge': 'Teddy Doge'
+}
+
+df_keywords = ['Bitcoin', 'Ethereum', 'Chainlink', 'thorchain', '$Atom', 'Bitforex', '$Avax', 'Terra Luna', '$FTT', 'Safemoon', '$STA', 'Beercoin', 'Teddy Doge']
+missing_keywords = set(df_keywords) - set(keyword_to_coin.keys())
+if missing_keywords:
+    print(f"Missing mappings for keywords: {missing_keywords}")
+
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+df['date'] = df['timestamp'].dt.date
+grouped = df.groupby(['searchkeyword', 'date']).size().reset_index(name='count')
+grouped = grouped.sort_values('date')
+keywords = df['searchkeyword'].unique()
+N = len(keywords)
+fig, axes = plt.subplots(N, 1, figsize=(12, N * 2), sharex=True)
+
+for i, keyword in enumerate(keywords):
+    ax = axes[i] if N > 1 else axes
+    data = grouped[grouped['searchkeyword'] == keyword]
+    data = data.set_index('date').reindex(
+        pd.date_range(start=grouped['date'].min(), end=grouped['date'].max()), fill_value=0
+    )
+    data['count_smooth'] = data['count']
+    ax.plot(data.index, data['count_smooth'])
+    ax.set_title(keyword)
+    ax.set_ylabel('Count')
+    
+    coin_name = keyword_to_coin.get(keyword)
+    if coin_name:
+        start_date, end_date = coin_to_dates.get(coin_name, (None, None))
+        if start_date and end_date:
+            ax.axvline(x=start_date, color='red', linestyle='--')
+            ax.axvline(x=end_date, color='red', linestyle='--')
+    
+    if i == N - 1:
+        ax.set_xlabel('Date')
+    else:
+        ax.set_xlabel('')
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True)
+
+plt.tight_layout()
+plt.suptitle('Count of Search Keywords over Time', y=1.02)
+plt.subplots_adjust(hspace=0.3)
+plt.show()
+```
+
