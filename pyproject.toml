@@ -36,6 +36,7 @@ dependencies = [
     "seaborn==0.13.2",
     "ruff==0.8.0",
     "beautifulsoup4==4.12.3",
+    "openai==1.55.2",
 ]
 
 [project.urls]
