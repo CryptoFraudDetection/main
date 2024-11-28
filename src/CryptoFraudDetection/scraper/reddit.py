@@ -28,15 +28,15 @@ class RedditScraper:
         self,
         logger: Logger,
         base_url: str = "https://old.reddit.com",
-        wait_range: tuple[int, int] = (1, 3),
-        blocked_wait_times: list[int] = [5, 10, 15],
+        wait_range: tuple[int, int] = (0.25, 0.75),
         headless: bool = True,
         max_search_limit: int = 100,
+        page_retry: int = 3,
     ):
         self._logger: Logger = logger
         self._base_url: str = base_url
         self._wait_range: tuple[int, int] = wait_range
-        self._blocked_wait_times: list[int] = blocked_wait_times
+        self.page_retry: int = page_retry
         self.headless: bool = headless
         self._max_search_limit: int = max_search_limit
 
@@ -172,32 +172,21 @@ class RedditScraper:
     def _load_page(self, url: str, xpath: str):
         """Load a page and check if we are blocked."""
         self._wait()
-        for i in range(len(self._blocked_wait_times)):
+        for _ in range(self.page_retry):
             try:
                 self._logger.debug(f"Loading URL: {url}")
                 self.driver.get(url)
-            except Exception as e:
-                # TODO: retry?
-                self._logger.error(f"Error loading URL {url}: {e}")
-
-            try:
                 self._check_if_blocked()
-                break  # Success
+                element = self._wait_for_element((By.XPATH, xpath))
+                if element:
+                    return element  # Success
             except exceptions.DetectedBotException:
-                wait_time = self._blocked_wait_times[i]
-                self._logger.warning(
-                    f"Waiting for {wait_time} because we got blocked on post {url}"
-                )
-                time.sleep(wait_time)
-
-        # Locate the element
-        element = self._wait_for_element((By.XPATH, xpath))
-
-        if not element:
-            self._logger.warning(f"Element {xpath} not found in post URL: {url}")
-            return None
-
-        return element
+                self._logger.warning(f"Switching proxy. Got blocked on post {url}")
+            except Exception as e:
+                self._logger.warning(f"Switching proxy. Unexpected error while loading page: {e}")
+            finally:
+                # Switch proxy because there was an error
+                self.start_driver()
 
     def scrape_post_list(
         self,
@@ -228,9 +217,12 @@ class RedditScraper:
         )
         if search_result_listing:
             # Check if there are no search results
-            footer = search_result_listing.find_element(By.XPATH, ".//footer")
-            if "there doesn't seem to be anything here" in footer.text:
-                return []
+            try:
+                footer = search_result_listing.find_element(By.XPATH, ".//footer")
+                if "there doesn't seem to be anything here" in footer.text:
+                    return []
+            except:
+                pass
 
             # Wait for search results to load
             self._wait_for_element(
@@ -345,6 +337,8 @@ class RedditScraper:
         """Start the WebDriver session if not already started."""
         while True:
             try:
+                if self.driver is not None:
+                    self.quit()
                 proxy = self._get_next_proxy()
                 self.driver = utils.get_driver(
                     self.headless, proxy.protocol, f"{proxy.ip}:{proxy.port}"
