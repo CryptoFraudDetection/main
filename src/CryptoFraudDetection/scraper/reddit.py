@@ -28,25 +28,26 @@ class RedditScraper:
         self,
         logger: Logger,
         base_url: str = "https://old.reddit.com",
-        wait_range: tuple[int, int] = (2, 4),
-        blocked_wait_range: tuple[int, int] = (2*60, 4*60),
+        wait_range: tuple[int, int] = (1, 3),
+        blocked_wait_times: list[int] = [5, 10, 15],
         headless: bool = True,
         max_search_limit: int = 100,
-        proxy_protocol: str | None = None,
-        proxy_address: str | None = None,
     ):
         self._logger: Logger = logger
         self._base_url: str = base_url
         self._wait_range: tuple[int, int] = wait_range
-        self._blocked_wait_range: tuple[int, int] = blocked_wait_range
+        self._blocked_wait_times: list[int] = blocked_wait_times
         self.headless: bool = headless
         self._max_search_limit: int = max_search_limit
-        self.proxy_protocol: str | None = proxy_protocol
-        self.proxy_address: str | None = proxy_address
 
         self.driver = None
         self.post_data: list[dict] = []
 
+    def _get_next_proxy(self, link="https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=csv&timeout=2000"):
+        proxy_list = pd.read_csv(link)
+        proxy_list = proxy_list.sample(1)
+        return proxy_list.iloc[0]
+    
     def _wait(self):
         """Wait for a random time between the specified range."""
         time.sleep(random.uniform(*self._wait_range))
@@ -59,7 +60,7 @@ class RedditScraper:
             )
             return element
         except TimeoutException:
-            self._logger.info(f"Timeout waiting for element with locator: {locator}")
+            self._logger.debug(f"Timeout waiting for element with locator: {locator}")
             return None
         except Exception as e:
             raise ValueError(f"Unexpected error while waiting for element: {e}")
@@ -154,13 +155,13 @@ class RedditScraper:
         self._wait_for_element((By.XPATH, comments_xpath))
         comments_divs = self.driver.find_elements(By.XPATH, comments_xpath)
         return self._extract_comments_rec(comments_divs)
-    
-    def check_if_blocked(self) -> bool:
-        post = self._wait_for_element((By.XPATH, '/html/body'))
+
+    def _check_if_blocked(self) -> bool:
+        post = self._wait_for_element((By.XPATH, "/html/body"))
         if not post:
             raise ValueError("Can't evaluate if blocked because post is None")
         try:
-            body_pre = post.find_element(By.XPATH, '/html/body/pre')
+            body_pre = post.find_element(By.XPATH, "/html/body/pre")
             if body_pre.text == "":
                 raise exceptions.DetectedBotException("Detected as a bot")
             else:
@@ -168,57 +169,37 @@ class RedditScraper:
         except NoSuchElementException:
             return  # Probably not blocked
 
-    def scrape_post_content(self, post: dict, retry: int = 10) -> dict:
-        """Load content from an individual post URL."""
+    def _load_page(self, url: str, xpath: str):
+        """Load a page and check if we are blocked."""
         self._wait()
-
-        for i in range(retry):
-            # Load the post URL
+        for i in range(len(self._blocked_wait_times)):
             try:
-                self._logger.info(f"Loading post URL: {post['url']}")
-                self.driver.get(post["url"])
+                self._logger.debug(f"Loading URL: {url}")
+                self.driver.get(url)
             except Exception as e:
-                self._logger.error(f"Error loading post URL {post['url']}: {e}")
-            
-            # Blocked?
+                # TODO: retry?
+                self._logger.error(f"Error loading URL {url}: {e}")
+
             try:
-                self.check_if_blocked()
-            except exceptions.DetectedBotException:
-                wait_time_multiplier = ((i + 1) ** 2)  # Exponential backoff
-                wait_time = round(random.uniform(*self._blocked_wait_range))
-                wait_time *= wait_time_multiplier
-                self._logger.warning(f"Waiting for {wait_time} because we got blocked on post {post['url']}")
-                time.sleep(wait_time)
-                continue  # Retry
-
-            # Locate the post entry
-            post_entry_xpath = '//div[contains(@class, "entry")]'
-            post_entry = self._wait_for_element((By.XPATH, post_entry_xpath))
-            if post_entry:
+                self._check_if_blocked()
                 break  # Success
-            else:
-                self._logger.error(f"Post entry not found in post URL: {post['url']}")
-        
-        if post_entry is None:
-            return None  # Might be retried if mutiple runs are done
+            except exceptions.DetectedBotException:
+                wait_time = self._blocked_wait_times[i]
+                self._logger.warning(
+                    f"Waiting for {wait_time} because we got blocked on post {url}"
+                )
+                time.sleep(wait_time)
 
-        # Extract post text
-        post_text_xpath = './/div[contains(@class, "md")]'
-        try:
-            post_text_div = post_entry.find_element(By.XPATH, post_text_xpath)
-            post["text"] = post_text_div.text
-        except NoSuchElementException:
-            # It is possible that the post has no text content
-            post["text"] = ""
-        except Exception as e:
-            raise ValueError(f"Unexpected error while extracting post text: {e}")
-        
-        # Extract comments
-        post["children"] = self._extract_comments()
-        
-        return post
+        # Locate the element
+        element = self._wait_for_element((By.XPATH, xpath))
 
-    def get_post_list(
+        if not element:
+            self._logger.warning(f"Element {xpath} not found in post URL: {url}")
+            return None
+
+        return element
+
+    def scrape_post_list(
         self,
         subreddit: str,
         search_query: str,
@@ -242,20 +223,15 @@ class RedditScraper:
         if after_post_id:
             url += f"&after={after_post_id}"
         # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
-        self._wait()
-        self._logger.info(f"Loading URL: {url}")
-        self.driver.get(url)
-
-        # Wait for search results to load
-        search_result_listing = self._wait_for_element(
-            (By.XPATH, '//div[contains(@class, "search-result-listing")]')
+        search_result_listing = self._load_page(
+            url, '//div[contains(@class, "search-result-listing")]'
         )
         if search_result_listing:
             # Check if there are no search results
             footer = search_result_listing.find_element(By.XPATH, ".//footer")
             if "there doesn't seem to be anything here" in footer.text:
                 return []
-            
+
             # Wait for search results to load
             self._wait_for_element(
                 (By.XPATH, '//div[contains(@class, "search-result-link")]')
@@ -266,28 +242,40 @@ class RedditScraper:
             if search_results:
                 return search_results
 
-        raise ValueError(f"Error while getting search results\nsubreddit: {subreddit}\nsearch_query: {search_query}\nlimit: {limit}\nafter postid: {after_post_id}\nurl: {url}")
+        raise ValueError(
+            f"Error while getting search results\nsubreddit: {subreddit}\nsearch_query: {search_query}\nlimit: {limit}\nafter postid: {after_post_id}\nurl: {url}"
+        )
 
-    def get_multipage_post_list(
+    def scrape_multipage_post_list(
         self,
         subreddit: str,
         search_query: str,
         limit: int = 500,
         start_date: str = None,
         after_post_id: str = None,
-        retry: int = 5,
+        retry: int = 3,
     ) -> None:
         """Search for posts in a specific subreddit on multiple sites to get more then 100."""
         for num_processed_posts in range(0, limit, self._max_search_limit):
             search_limit = min(self._max_search_limit, limit - num_processed_posts)
 
-            # Load one page of search results
-            search_results = self.get_post_list(
-                subreddit, search_query, search_limit, after_post_id
-            )
+            for _ in range(retry):
+                # Load one page of search results
+                search_results = self.scrape_post_list(
+                    subreddit, search_query, search_limit, after_post_id
+                )
+                if search_results:
+                    break  # Success
+
             # Break if there are no more search results
-            if not search_results:
+            if isinstance(search_results, list) and len(search_results) == 0:
                 break
+            
+            # Catch if no search_results (unexpected)
+            if not search_results:
+                raise ValueError(
+                    f"Error while getting search results\nsubreddit: {subreddit}\nsearch_query: {search_query}\nlimit: {limit}\nafter postid: {after_post_id}"
+                )
 
             # Extract post metadata from the html elements
             for result in search_results:
@@ -313,34 +301,65 @@ class RedditScraper:
 
         return self.post_data
 
+    def scrape_post_content(self, post: dict) -> dict:
+        """Load content from an individual post URL."""
+        # Locate the post entry
+        post_entry_xpath = '//div[contains(@class, "entry")]'
+        post_entry = self._load_page(post["url"], post_entry_xpath)
+
+        if post_entry is None:
+            return None  # Might be retried if mutiple runs are done
+
+        # Extract post text
+        post_text_xpath = './/div[contains(@class, "md")]'
+        try:
+            post_text_div = post_entry.find_element(By.XPATH, post_text_xpath)
+            post["text"] = post_text_div.text
+        except NoSuchElementException:
+            # It is possible that the post has no text content
+            post["text"] = ""
+        except Exception as e:
+            raise ValueError(f"Unexpected error while extracting post text: {e}")
+
+        # Extract comments
+        post["children"] = self._extract_comments()
+
+        return post
+
     def get_posts_without_content(self):
         """Get posts without text content."""
         return [post for post in self.post_data if post.get("text") is None]
 
-    def scrape_all_post_contents(self, retry: int = 5):
+    def scrape_all_missing_post_contents(self, retry: int = 3):
         """Scrape the content of posts (without content) in self.post_data."""
         for _ in range(retry):
             for post in self.get_posts_without_content():
                 self.scrape_post_content(post)
             num_posts_without_content = len(self.get_posts_without_content())
             if num_posts_without_content == 0:
-                return len(self.get_posts_without_content())
-        raise f"{self.get_posts_without_content()} are still missing after {retry} tries."
+                return  # Success
 
+        raise f"{num_posts_without_content} are still missing after {retry} tries."
 
     def start_driver(self):
         """Start the WebDriver session if not already started."""
-        self.driver = utils.get_driver(
-            self.headless, self.proxy_protocol, self.proxy_address
-        )
-        self._logger.info("WebDriver session started.")
+        while True:
+            try:
+                proxy = self._get_next_proxy()
+                self.driver = utils.get_driver(
+                    self.headless, proxy.protocol, f"{proxy.ip}:{proxy.port}"
+                )
+                self._logger.debug("WebDriver session started.")
+                return  # Success
+            except exceptions.ProxyNotWorking:
+                self._logger.info("Proxy not working, trying next one.")
 
     def quit(self):
         """Quit the WebDriver session if it's running."""
         if self.driver is not None:
             self.driver.quit()
             self.driver = None
-            self._logger.info("WebDriver session quit.")
+            self._logger.debug("WebDriver session quit.")
 
     def to_dataframe(self):
         """Convert scraped data to a pandas DataFrame."""
@@ -351,7 +370,7 @@ class RedditScraper:
         scrape Reddit
         """
         self.start_driver()
-        self.get_multipage_post_list(*args, **kwargs)
-        self.scrape_all_post_contents()
+        self.scrape_multipage_post_list(*args, **kwargs)
+        self.scrape_all_missing_post_contents()
         self.quit()
         return self.to_dataframe()

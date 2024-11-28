@@ -76,7 +76,7 @@ def test_get_multipage_post_list():
     try:
         scraper = RedditScraper(logger_, max_search_limit=2)
         scraper.start_driver()
-        posts = scraper.get_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=3)
+        posts = scraper.scrape_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=3)
         assert isinstance(posts, list)
         assert len(posts) > 0
     finally:
@@ -90,7 +90,7 @@ def test_get_multipage_post_list_with_start_date():
     try:
         scraper = RedditScraper(logger_, max_search_limit=2)
         scraper.start_driver()
-        posts = scraper.get_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=100, start_date='2024-07-10', after_post_id='t3_1fh7myu')
+        posts = scraper.scrape_multipage_post_list('r/CryptoCurrency', 'Terra Luna', limit=100, start_date='2024-07-10', after_post_id='t3_1fh7myu')
         assert isinstance(posts, list)
         assert len(posts) == 4
     finally:
