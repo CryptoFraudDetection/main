@@ -31,14 +31,18 @@ class RedditScraper:
         wait_range: tuple[int, int] = (0.25, 0.75),
         headless: bool = True,
         max_search_limit: int = 100,
-        page_retry: int = 3,
+        page_retry: int = 1_000,
+        scrape_post_list_retry: int = 10,
+        scrape_missing_posts_retry: int = 10,
     ):
         self._logger: Logger = logger
         self._base_url: str = base_url
         self._wait_range: tuple[int, int] = wait_range
-        self.page_retry: int = page_retry
         self.headless: bool = headless
         self._max_search_limit: int = max_search_limit
+        self.page_retry: int = page_retry
+        self.scrape_post_list_retry: int = scrape_post_list_retry
+        self.scrape_missing_posts_retry: int = scrape_missing_posts_retry
 
         self.driver = None
         self.post_data: list[dict] = []
@@ -183,10 +187,11 @@ class RedditScraper:
             except exceptions.DetectedBotException:
                 self._logger.warning(f"Switching proxy. Got blocked on post {url}")
             except Exception as e:
-                self._logger.warning(f"Switching proxy. Unexpected error while loading page: {e}")
-            finally:
-                # Switch proxy because there was an error
-                self.start_driver()
+                pass  # Retry
+
+            # Switch proxy because there was an error
+            self._logger.warning(f"Switching proxy. Unexpected error while loading page {url}")
+            self.start_driver()
 
     def scrape_post_list(
         self,
@@ -197,7 +202,7 @@ class RedditScraper:
     ) -> list:
         """Search for posts in a specific subreddit, max 100"""
         if limit > self._max_search_limit:
-            raise ValueError(f"Limit must be less than {self._max_search_limit}")
+            self._logger.warning(f"Limit for loading a single page of search results must be less than {self._max_search_limit}")
         url = (
             self._base_url
             + "/"
@@ -209,9 +214,9 @@ class RedditScraper:
             + "&t=all"
             + f"&limit={limit}"
         )
+        # Add after_post_id if provided to get the next page of search results
         if after_post_id:
             url += f"&after={after_post_id}"
-        # TODO: error handling (differentiate between exceptions and maybe try again? sometimes dying might be ok)
         search_result_listing = self._load_page(
             url, '//div[contains(@class, "search-result-listing")]'
         )
@@ -220,23 +225,22 @@ class RedditScraper:
             try:
                 footer = search_result_listing.find_element(By.XPATH, ".//footer")
                 if "there doesn't seem to be anything here" in footer.text:
-                    return []
+                    return []  # No search results
             except:
-                pass
+                pass  # Continue
 
             # Wait for search results to load
             self._wait_for_element(
                 (By.XPATH, '//div[contains(@class, "search-result-link")]')
             )
+            
             search_results: list | None = self.driver.find_elements(
                 By.XPATH, '//div[contains(@class, "search-result-link")]'
             )
             if search_results:
-                return search_results
+                return search_results  # Success
 
-        raise ValueError(
-            f"Error while getting search results\nsubreddit: {subreddit}\nsearch_query: {search_query}\nlimit: {limit}\nafter postid: {after_post_id}\nurl: {url}"
-        )
+        self._logger.warning(f"Error while getting search results\nsubreddit: {subreddit}\nsearch_query: {search_query}\nlimit: {limit}\nafter postid: {after_post_id}\nurl: {url}")
 
     def scrape_multipage_post_list(
         self,
@@ -245,24 +249,30 @@ class RedditScraper:
         limit: int = 500,
         start_date: str = None,
         after_post_id: str = None,
-        retry: int = 3,
     ) -> None:
         """Search for posts in a specific subreddit on multiple sites to get more then 100."""
         for num_processed_posts in range(0, limit, self._max_search_limit):
             search_limit = min(self._max_search_limit, limit - num_processed_posts)
 
-            for _ in range(retry):
-                # Load one page of search results
-                search_results = self.scrape_post_list(
-                    subreddit, search_query, search_limit, after_post_id
-                )
-                if search_results:
-                    break  # Success
+            search_results = None
+            for i in range(self.scrape_post_list_retry):
+                if i > 0:
+                    self._logger.info(f"Retry {i+1} for getting post list for subreddit {subreddit} and search query {search_query}")
+                try:
+                    # Load one page of search results
+                    search_results = self.scrape_post_list(
+                        subreddit, search_query, search_limit, after_post_id
+                    )
+                    if search_results is not None:
+                        break  # Success
+                except:
+                    self.start_driver()  # Switch proxy and retry
 
             # Break if there are no more search results
             if isinstance(search_results, list) and len(search_results) == 0:
                 break
             
+            # TODO: warn but do not raise 
             # Catch if no search_results (unexpected)
             if not search_results:
                 raise ValueError(
@@ -322,16 +332,20 @@ class RedditScraper:
         """Get posts without text content."""
         return [post for post in self.post_data if post.get("text") is None]
 
-    def scrape_all_missing_post_contents(self, retry: int = 3):
+    def scrape_all_missing_post_contents(self):
         """Scrape the content of posts (without content) in self.post_data."""
-        for _ in range(retry):
+        for i in range(self.scrape_missing_posts_retry):
+            if i > 0:
+                num_posts_without_content = len(self.get_posts_without_content())
+                self._logger.info(f"Retry {i+1} for getting post content. {num_posts_without_content} posts are missing.")
             for post in self.get_posts_without_content():
                 self.scrape_post_content(post)
             num_posts_without_content = len(self.get_posts_without_content())
             if num_posts_without_content == 0:
                 return  # Success
+            # Retry if there are still posts without content
 
-        raise f"{num_posts_without_content} are still missing after {retry} tries."
+        self._logger.warning(f"{num_posts_without_content} are still missing after {self.scrape_missing_posts_retry} tries.")
 
     def start_driver(self):
         """Start the WebDriver session if not already started."""
@@ -367,4 +381,6 @@ class RedditScraper:
         self.scrape_multipage_post_list(*args, **kwargs)
         self.scrape_all_missing_post_contents()
         self.quit()
+        # TODO: if no data return None
+        # TODO: return self.post_data ?
         return self.to_dataframe()
