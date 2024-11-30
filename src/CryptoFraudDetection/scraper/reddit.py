@@ -22,7 +22,6 @@ from CryptoFraudDetection.scraper import utils
 from CryptoFraudDetection.utils.logger import Logger
 from CryptoFraudDetection.utils import exceptions
 
-
 class RedditScraper:
     """
     A class to scrape Reddit posts using Selenium.
@@ -663,4 +662,4 @@ class RedditScraper:
         self.quit()
         # TODO: if no data return None
         # TODO: return self.post_data ?
-        return self.to_dataframe()
+        # return self.to_dataframe()
