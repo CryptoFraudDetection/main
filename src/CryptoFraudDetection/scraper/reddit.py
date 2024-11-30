@@ -43,6 +43,7 @@ class RedditScraper:
         proxy_list_file: str = "../data/proxy_list.csv",
         scrape_post_list_retry: int = 10,
         scrape_missing_posts_retry: int = 10,
+        proxy_switch_wait_time: int = 1,
     ):
         """
         Initialize the RedditScraper with the given configuration parameters.
@@ -67,6 +68,7 @@ class RedditScraper:
                 the post list. Defaults to 10.
             scrape_missing_posts_retry (int, optional): Number of retries for
                 scraping missing posts. Defaults to 10.
+            proxy_switch_wait_time (int, optional): Time to wait when switching proxies.
         """
         self._logger: Logger = logger
         self._base_url: str = base_url
@@ -78,6 +80,7 @@ class RedditScraper:
         self.proxy_list_file: str = proxy_list_file
         self.scrape_post_list_retry: int = scrape_post_list_retry
         self.scrape_missing_posts_retry: int = scrape_missing_posts_retry
+        self._proxy_switch_wait_time: int = proxy_switch_wait_time
 
         self.driver = None # Will hold the Selenium WebDriver instance
         self.post_data: list[dict] = []
@@ -630,6 +633,7 @@ class RedditScraper:
             try:
                 if self.driver is not None:
                     self.quit()
+                    time.sleep(self._proxy_switch_wait_time)
                 proxy = self._get_next_proxy()
                 self.driver = utils.get_driver(
                     self.headless, proxy.protocol, f"{proxy.ip}:{proxy.port}"
