@@ -624,19 +624,6 @@ class RedditScraper:
             self.driver = None
             self._logger.debug("WebDriver session quit.")
 
-    def to_dataframe(self):
-        """
-        Convert the scraped data to a pandas DataFrame.
-
-        Returns:
-            pd.DataFrame: A DataFrame containing the scraped post data.
-
-        Notes:
-            - The DataFrame is constructed from the `self.post_data` list of dictionaries.
-            - Useful for data analysis and storage after scraping is complete.
-        """
-        return pd.DataFrame(self.post_data)
-
     def scrape(self, *args, **kwargs):
         """
         Perform the entire scraping process.
@@ -660,6 +647,3 @@ class RedditScraper:
         self.scrape_multipage_post_list(*args, **kwargs)
         self.scrape_all_missing_post_contents()
         self.quit()
-        # TODO: if no data return None
-        # TODO: return self.post_data ?
-        # return self.to_dataframe()
