@@ -89,6 +89,8 @@ plt.subplots_adjust(hspace=0.3)
 plt.show()
 ```
 
+In this plot we can see the Count of Tweets of every coin over the time. In red we can see the start and enddate which we are interested in. Some peaks in the Bitcoin Timeseries are very high because this Data is from a time where we test scraped without the Timeblock-function and we dont want to delete this data.
+
 ```{python}
 #cut out coins of test data
 test_coins = ['Ethereum', '$Atom', '$FTT', 'Safemoon']
@@ -144,3 +146,4 @@ def create_heatmaps(df, words_list):
 create_heatmaps(df_train, words_list)
 ```
 
+In these plot we can see heatmaps for every coin in the Trainset showing how much some words occured over time. It is visible, that words like moon or pump are a little bit more used in Scamcoins.

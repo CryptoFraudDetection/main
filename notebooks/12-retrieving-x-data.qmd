@@ -2,6 +2,8 @@
 jupyter: python3
 ---
 
+In this Notebook we retrieve the Data from the database and make some first processing steps.
+
 ```{python}
 import pandas as pd
 from tqdm import tqdm

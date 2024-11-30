@@ -71,3 +71,4 @@ plt.tight_layout()
 plt.show()
 ```
 
+This plot shows the count of Tweets per Coin in the scraped X Dataset. Some Coins have not that much Tweets, but thats because they also have a shorter Price-Timeseries which we use as start and enddate for scraping.
