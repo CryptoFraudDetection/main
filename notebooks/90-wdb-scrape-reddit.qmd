@@ -1,0 +1,186 @@
+---
+title: Scrape Reddit Posts
+jupyter: python3
+---
+
+```{python}
+from contextlib import contextmanager
+import json
+import os
+import time
+
+import pandas as pd
+
+from CryptoFraudDetection.utils.enums import ScraperNotebookMode, LoggerMode
+from CryptoFraudDetection.utils.logger import Logger
+from CryptoFraudDetection.scraper.reddit import RedditScraper
+from CryptoFraudDetection.elasticsearch.data_insertion import insert_dataframe
+
+logger = Logger(name="scrape_reddit", level=LoggerMode.INFO, log_dir="../logs")
+```
+
+```{python}
+# Enable or disable scraping
+MODE = ScraperNotebookMode.WRITE
+# Number of subreddits and queries to scrape
+# set to None to scrape all
+SUBREDDIT_LIMIT = None
+QUERY_LIMIT = None
+DB_RETRY = 10
+```
+
+```{python}
+subreddits: list[str] = [
+    "r/CryptoCurrency",
+    "r/CryptoMoonShots",
+    "r/CryptoMarkets",
+    "r/Crypto",
+    "r/Ethereum",
+    "r/Bitcoin",
+    "r/btc",
+    "r/litecoin",
+    "r/ethtrader",
+    "r/Ripple",
+    "r/BitcoinMarkets",
+    "r/altcoin",
+    "r/binance",
+]
+
+coins: list[str] = [
+    "Bitcoin",
+    "BTC",
+    "Ethereum",
+    "ETH",
+    "Cosmos",
+    "ATOM",
+    "Avalanche",
+    "AVAX",
+    "FTX Token",
+    "FTT",
+    "Terra Luna Classic",
+    "Terra Luna",
+    "Terra Classic",
+    "LUNC",
+    "Squid-Game-Coin",
+    "SQUID",
+    "BeerCoin",
+    "BEER",
+    "BitForex",
+    "BF",
+    "BeerCoin",
+    "BEER",
+    "Safe Moon",
+    "SAFEMOON",
+    "Teddy Doge",
+    "TEDDY V2",
+    "STOA Network",
+    "STA",
+    "Chainlink",
+    "LINK",
+    "Polkadot",
+    "DOT",
+    "Solana",
+    "SOL",
+    "THORChain",
+    "RUNE",
+    "Avalanche",
+    "AVAX",
+    "Algorand",
+    "ALGO",
+    "Polygon",
+    "MATIC",
+    "Cardano",
+    "ADA",
+    "VeChain",
+    "VET",
+]
+```
+
+```{python}
+subreddits_ = subreddits[:SUBREDDIT_LIMIT] if SUBREDDIT_LIMIT else subreddits
+coins_ = coins[:QUERY_LIMIT] if QUERY_LIMIT else coins
+```
+
+```{python}
+class LockFileExistsError(Exception):
+    """Custom exception raised when the lock file already exists."""
+    pass
+
+@contextmanager
+def acquire_lock(lock_file_path):
+    if os.path.exists(lock_file_path):
+        raise LockFileExistsError(f"Lock file already exists: {lock_file_path}")
+    try:
+        with open(lock_file_path, "w") as lock_file:
+            pass
+        yield
+    finally:
+        if os.path.exists(lock_file_path):
+            os.remove(lock_file_path)
+```
+
+```{python}
+def scrape_subreddit_coin(subreddit:str, coin:str):
+    # JSON file path
+    sub_: str = subreddit.split("/")[-1].lower()
+    coin_: str = coin.lower()
+    json_path: str = f"../data/reddit/{sub_}_{coin_}.json"
+    
+    try:  # try-except block to handle lock file
+        # Lock file for subreddit and coin combination
+        # This is to prevent multiple processes from scraping the same subreddit and coin
+        lock_file_path = json_path + '.lock'
+        with acquire_lock(lock_file_path):
+            # Skip scraping if file already exists
+            data: list[dict] | None = None
+            try:
+                data = json.load(open(json_path))
+                logger.info(
+                    f"Skipping scraping for sub: {subreddit}, coin: {coin} as it could be read from file."
+                )
+            except FileNotFoundError:
+                pass
+            
+            # Scrape if data is not read from file
+            if data is None:
+                # Scrape
+                logger.info(f"Scraping for sub: {subreddit}, coin: {coin}")
+                scraper = RedditScraper(logger, headless=True)
+                scraper.scrape(subreddit, coin)
+                data = scraper.post_data
+                
+                # Write to file
+                with open(json_path, "w") as f:
+                    f.write(json.dumps(data, indent=4))
+            
+            # convert to dataframe
+            post_df = pd.DataFrame(data)
+            post_df.rename(columns={"num_comment": "num_comments", "text": "body"}, inplace=True)
+            post_df["subreddit"] = sub_
+            post_df["search_query"] = coin_
+            
+            # Write to db
+            for i in range(DB_RETRY):
+                try:
+                    if i > 0:
+                        time.sleep(i**2)  # exponential backoff
+                        logger.warning(f"Retry {i} for writing subreddit '{subreddit}' coin '{coin}' to db.")
+                    insert_dataframe(logger, "wdb", post_df)
+                    break
+                except Exception as e:
+                    logger.warning(f"Error occurred while writing to db. Error: {e}")
+
+    # Skip if lock file is already acquired by another process
+    except LockFileExistsError:
+        logger.info(
+            f"Skipping scraping for sub: {subreddit}, coin: {coin} as it is being scraped by another process."
+        )
+```
+
+```{python}
+if MODE == ScraperNotebookMode.WRITE:
+    for subreddit in subreddits_:
+        for coin in coins_:
+            scrape_subreddit_coin(subreddit, coin)
+```
+

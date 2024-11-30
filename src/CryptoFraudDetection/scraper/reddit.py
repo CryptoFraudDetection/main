@@ -9,8 +9,9 @@ Authors:
 - Florian Baumgartner florian.baumgartner1@students.fhnw.ch
 """
 
-import time
+import os
 import random
+import time
 
 import pandas as pd
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -38,6 +39,8 @@ class RedditScraper:
         headless: bool = True,
         max_search_limit: int = 100,
         page_retry: int = 1_000,
+        proxy_list_retry: int = 10,
+        proxy_list_file: str = "../data/proxy_list.csv",
         scrape_post_list_retry: int = 10,
         scrape_missing_posts_retry: int = 10,
     ):
@@ -57,6 +60,9 @@ class RedditScraper:
                 Defaults to 100.
             page_retry (int, optional): Number of times to retry loading a page
                 upon failure. Defaults to 1,000.
+            proxy_list_retry (int, optional): Number of retries for fetching a new
+                proxy list. Defaults to 10.
+            proxy_list_file (str, optional): Path to the proxy list file.
             scrape_post_list_retry (int, optional): Number of retries for scraping
                 the post list. Defaults to 10.
             scrape_missing_posts_retry (int, optional): Number of retries for
@@ -68,11 +74,14 @@ class RedditScraper:
         self.headless: bool = headless
         self._max_search_limit: int = max_search_limit
         self.page_retry: int = page_retry
+        self.proxy_list_retry: int = proxy_list_retry
+        self.proxy_list_file: str = proxy_list_file
         self.scrape_post_list_retry: int = scrape_post_list_retry
         self.scrape_missing_posts_retry: int = scrape_missing_posts_retry
 
         self.driver = None # Will hold the Selenium WebDriver instance
         self.post_data: list[dict] = []
+        self._proxy_list: pd.DataFrame | None = None
 
     def _get_next_proxy(self, link="https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=csv&timeout=2000"):
         """
@@ -85,9 +94,27 @@ class RedditScraper:
         Returns:
             str: A randomly selected proxy from the list.
         """
-        # Read the proxy list from the given URL and take one random proxy
-        proxy_list = pd.read_csv(link)
-        proxy_list = proxy_list.sample(1)
+        # Download the proxy list if it hasn't been fetched yet
+        if self._proxy_list is None or self._proxy_list.empty:
+            if os.path.exists(self.proxy_list_file):
+                try:
+                    # Read the proxy list from the file
+                    self._proxy_list = pd.read_csv(self.proxy_list_file)
+                except Exception as e:
+                    self._logger.warning(f"Error reading proxy list from file: {e}")
+            else:
+                for i in range(self.proxy_list_retry):
+                    if i > 0:
+                        time.sleep(i**2) # Exponential backoff
+                        self._logger.info(f"Retry {i+1} for fetching proxy list.")
+                    try:
+                        # Read the proxy list from the given URL
+                        self._proxy_list = pd.read_csv(link)
+                    except Exception as e:
+                        self._logger.warning(f"Error fetching proxy list: {e}")
+        
+        # Select a random proxy from the list
+        proxy_list = self._proxy_list.sample(1)
         return proxy_list.iloc[0]
     
     def _wait(self):
