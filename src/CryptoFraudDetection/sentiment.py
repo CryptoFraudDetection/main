@@ -22,7 +22,7 @@ def get_client():
 def get_chat_bot(
     client: openai.Client | None = None,
     model: str = "gpt-4",
-    content: str = "You are a helpful assistant.",
+    content: str = "You are a sentiment analyser.",
 ) -> Callable[[str], str]:
     """Creates a chatbot for generating responses based on user input.
 
@@ -90,7 +90,7 @@ def sentiment(texts:list[str], chat_bot: Callable[[str], str] | None = None, max
         chat_bot_query = (
             f"Rate the sentiment of the following text on a scale from 0 to {max_score}.\n"
             f"Text: {text}\n"
-            f"Only give the integer value."
+            f"Only give the integer value, DO NOT use words and Characters!"
         )
         response = chat_bot(chat_bot_query)
         if response:

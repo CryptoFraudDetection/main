@@ -306,7 +306,7 @@ plot_timeline(timeline)
 ```
 ## Sentiment Analysis
 ```{python}
-def get_data_for_sentiment(index,q)
+def get_data_for_sentiment(index,q):
     hits_ = get_data(index,q)
 
     hits_
@@ -324,9 +324,9 @@ def get_data_for_sentiment(index,q)
 data_sentiment = get_data_for_sentiment('wdb','*')
 ```
 ```{python}
+sentiment_texts = [d["title"] for d in data_sentiment]
 
-sentiment_texts = data_sentiment[['title']]
-
-sentiment_texts
+scores = sentiment.sentiment(sentiment_texts)
+scores
 ```
 
