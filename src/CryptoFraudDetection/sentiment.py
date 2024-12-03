@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Callable
 
 from dotenv import load_dotenv
@@ -94,7 +95,16 @@ def sentiment(texts:list[str], chat_bot: Callable[[str], str] | None = None, max
         )
         response = chat_bot(chat_bot_query)
         if response:
-            sentiment_scores.append(int(response))
+            if response.isdigit():
+                sentiment_scores.append(int(response))
+            else:
+                try:
+                    response = re.search(r'\d+', response)
+                    sentiment_score = int(response.group())
+                    sentiment_scores.append(sentiment_score)
+                except Exception as e:
+                    sentiment_scores.append(None) # failure no number found
+                
         else:
             sentiment_scores.append(None)  # failure
     
