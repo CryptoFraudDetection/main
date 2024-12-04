@@ -243,14 +243,27 @@ def visualize_subreddit_counts(scraped_subreddits_posts):
 
 ```
 ```{python}
-# Retrieve data from Elasticsearch
 def get_data(index,q):
+    '''
+    Retrieve data from Elasticsearch
+
+    Args:
+        index:  index of elastic db
+        q:      query for search in elasticsearch
+    '''
     # Retrieve data from the index
     response = search_data(index=index, q=q)
     hits = response['hits']['hits']
     return hits
 
 def get_timeline_data(index,q):
+    '''
+    extract date and content from data on elastic search
+
+    Args:
+        index:  index of elastic db
+        q:      query for search in elasticsearch
+    '''
     hits = get_data(index,q)
     # Extract relevant fields
     data = []
@@ -263,8 +276,14 @@ def get_timeline_data(index,q):
     
     return data
 
-# Process data
+
 def process_data(data):
+    '''
+    process the data from elasticsearch
+
+    Args:
+        data: data from elasticsearch
+    '''
     df = pd.DataFrame(data)
     df['date'] = pd.to_datetime(df['date'])  # Ensure the date column is in datetime format
     
@@ -272,11 +291,17 @@ def process_data(data):
     timeline = df.groupby(['subreddit', 'date']).size().reset_index(name='post_count')
     return timeline
 
-# Plot data
+
 def plot_timeline(timeline):
+    '''
+    plots the amount of post on a timeline per subreddit
+
+    Args:
+        timeline:   data with date and count
+    '''
     subreddits = timeline['subreddit'].unique()
     
-    # Define the size of the figure
+    # Define size of figure
     num_subreddits = len(subreddits)
     fig, axes = plt.subplots(nrows=num_subreddits, ncols=1, figsize=(10, 4 * num_subreddits))
     
@@ -292,7 +317,6 @@ def plot_timeline(timeline):
         ax.set_ylabel("Number of Posts", fontsize=10)
         ax.grid(True)
     
-    # Adjust layout for better spacing
     plt.tight_layout()
     plt.show()
 ```
@@ -307,6 +331,13 @@ plot_timeline(timeline)
 ## Sentiment Analysis
 ```{python}
 def get_data_for_sentiment(index,q):
+    '''
+    get the relevant data for the sentiment analysis from the elastic db
+
+    Args:
+        index:  index of elastic db
+        q:      query for search in elasticsearch
+    '''
     hits_ = get_data(index,q)
 
     hits_
@@ -324,23 +355,19 @@ def get_data_for_sentiment(index,q):
 data_sentiment = get_data_for_sentiment('wdb','*')
 ```
 ```{python}
-count = 0
-
+# get post text, make sentiment-analysis of it and save it score in the same dict
 for d in data_sentiment:
     title = d.get("title", "")
     if isinstance(title, str):
         try:
             score = sentiment.sentiment([title])
             d['sentiment_score'] = score
-            count += 1
         except:
             d['sentiment_score'] = None
     else:
         d['sentiment_score'] = None
     
     print(d['id'], d['sentiment_score'])
-    if count == 15:
-        break
 ```
 ```{python}
 print(f"id: {data_sentiment[:][0]['id']}, score: {data_sentiment[:][0]['sentiment_score']}")
