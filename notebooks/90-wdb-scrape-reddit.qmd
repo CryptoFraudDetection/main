@@ -324,9 +324,25 @@ def get_data_for_sentiment(index,q):
 data_sentiment = get_data_for_sentiment('wdb','*')
 ```
 ```{python}
-sentiment_texts = [d["title"] for d in data_sentiment]
+count = 0
 
-scores = sentiment.sentiment(sentiment_texts)
-scores
+for d in data_sentiment:
+    title = d.get("title", "")
+    if isinstance(title, str):
+        try:
+            score = sentiment.sentiment([title])
+            d['sentiment_score'] = score
+            count += 1
+        except:
+            d['sentiment_score'] = None
+    else:
+        d['sentiment_score'] = None
+    
+    print(d['id'], d['sentiment_score'])
+    if count == 15:
+        break
+```
+```{python}
+print(f"id: {data_sentiment[:][0]['id']}, score: {data_sentiment[:][0]['sentiment_score']}")
 ```
 
