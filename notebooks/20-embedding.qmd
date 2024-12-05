@@ -1,6 +1,6 @@
 ---
 title: Crypto Fraud Detection - Embedding Notebook
-author: 'Gabriel Torres Gamez, Florian Baumgartner, Can-Elian Barth, Aaron Brülisauer'
+author: Gabriel Torres Gamez, Florian Baumgartner, Can-Elian Barth, Aaron Brülisauer
 execute-dir: file
 output-dir: output
 toc: true
@@ -23,7 +23,7 @@ from CryptoFraudDetection.utils import enums
 from CryptoFraudDetection.utils import logger
 from CryptoFraudDetection.elasticsearch import data_retrieval
 
-LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.DEBUG, log_dir="../logs")
+LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.INFO, log_dir="../logs")
 ```
 
 ```{python}
@@ -49,14 +49,14 @@ def get_post_texts(posts: list[dict[str, any]]) -> list[str]:
 ```
 
 ```{python}
-db_response = data_retrieval.search_data(index="reddit_posts", q="*", size=3)
+db_response = data_retrieval.search_data(index="reddit_posts", q="*", size=1_000)
 posts = get_posts(db_response)
 post_texts = get_post_texts(posts)
-print(post_texts)
+print(f"Number of posts: {len(post_texts)}")
 ```
 
 ```{python}
 embeddings = embedding.embed(LOGGER, post_texts)
-print(embeddings)
+print(f"Number of embeddings: {len(embeddings)}")
 ```
 
