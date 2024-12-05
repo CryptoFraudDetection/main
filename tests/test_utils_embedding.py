@@ -2,6 +2,8 @@
 This module contains the tests for the utils.embedding module.
 """
 
+import numpy as np
+
 import CryptoFraudDetection.utils.logger as logger
 from CryptoFraudDetection.utils import embedding
 from CryptoFraudDetection.utils.enums import LoggerMode
@@ -21,8 +23,8 @@ def test_embed():
     embedded_text = embedder.embed(text)
     
     assert embedded_text is not None
-    assert len(embedded_text) == 1
-    assert len(embedded_text[0]) > 0
+    assert isinstance(embedded_text, np.ndarray)
+    assert len(embedded_text) > 0
 
 def test_embed_multiple():
     """Test the embed_multiple method of the Embedding class"""
@@ -32,8 +34,10 @@ def test_embed_multiple():
     embedded_text = embedder.embed(text)
     
     assert embedded_text is not None
+    assert isinstance(embedded_text, list)
     assert len(embedded_text) == 2
     for x in embedded_text:
+        assert isinstance(x, np.ndarray)
         assert len(x) > 0
 
 def test_on_the_fly_embedding():
@@ -43,12 +47,14 @@ def test_on_the_fly_embedding():
     embedded_text = embedding.embed(logger_=LOGGER, text=text)
     
     assert embedded_text is not None
+    assert isinstance(embedded_text, list)
     assert len(embedded_text) == 2
     for x in embedded_text:
+        assert isinstance(x, np.ndarray)
         assert len(x) > 0
 
 def test_cos_sim():
-    """Test the cos_sim method of the Embedding class"""
+    """Test the cos_sim function"""
     text = ["Hi, how are you?", "Hello, how are you?"]
     
     embedded_text = embedding.embed(logger_=LOGGER, text=text)
@@ -56,10 +62,10 @@ def test_cos_sim():
     LOGGER.debug(f"Cosine similarity of {text}: {cos_sim}")
     
     assert cos_sim is not None
-    assert cos_sim > 0.9
+    assert cos_sim > 0.98
 
 def test_long_text_embedding():
-    """Test embedding of a long text."""
+    """Test embedding of long texts."""
     sentence = "This is a test sentence."
     
     text = [" ".join([sentence] * n) for n in (1_000, 1_000_000)]
@@ -69,9 +75,32 @@ def test_long_text_embedding():
     embedded_text = embedding.embed(logger_=info_logger, text=text)
     
     assert embedded_text is not None
+    assert isinstance(embedded_text, list)
     assert len(embedded_text) == 2
     for x in embedded_text:
+        assert isinstance(x, np.ndarray)
         assert len(x) > 0
+
+def test_sim_long_text_embedding():
+    """Test similarity of embeddings of long texts"""
+    sentence = "This is a test sentence."
+    
+    text = [" ".join([sentence] * n) for n in (1_000, 1_000_000)]
+    LOGGER.debug(f"Embedding long text. Text lengths: {[len(t) for t in text]}")
+    # prevent long debug output
+    info_logger = logger.Logger(name=__name__, level=LoggerMode.INFO, log_dir="../logs")
+    embedded_text = embedding.embed(logger_=info_logger, text=text)
+    cos_sim = embedding.cos_sim(embedded_text[0], embedded_text[1])
+    
+    assert embedded_text is not None
+    assert isinstance(embedded_text, list)
+    assert len(embedded_text) == 2
+    for x in embedded_text:
+        assert isinstance(x, np.ndarray)
+        assert len(x) > 0
+    assert cos_sim is not None
+    assert cos_sim > 0.99
+    
 
 if __name__ == '__main__':
     test_initialization()
