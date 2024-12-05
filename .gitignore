@@ -179,3 +179,5 @@ cookies/
 # Data
 data/processed/*.csv
 data/processed/*.parquet
+data/reddit/*.json
+data/reddit/*json.lock
