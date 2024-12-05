@@ -1,0 +1,62 @@
+---
+title: Crypto Fraud Detection - Embedding Notebook
+author: 'Gabriel Torres Gamez, Florian Baumgartner, Can-Elian Barth, Aaron Brülisauer'
+execute-dir: file
+output-dir: output
+toc: true
+number-sections: true
+number-depth: 2
+papersize: a4paper
+code-line-numbers: true
+code-fold: true
+code-overflow: wrap
+self-contained: true
+---
+
+```{python}
+from typing import Any
+
+from elastic_transport import ObjectApiResponse
+
+from CryptoFraudDetection.utils import embedding
+from CryptoFraudDetection.utils import enums
+from CryptoFraudDetection.utils import logger
+from CryptoFraudDetection.elasticsearch import data_retrieval
+
+LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.DEBUG, log_dir="../logs")
+```
+
+```{python}
+def get_posts(db_response: ObjectApiResponse | dict[str, Any]) -> list[dict[str, any]]:
+    """Get posts out of DB response
+
+    Args:
+        db_response: Object
+
+    Returns: List of Posts
+    """
+    return [hit['_source'] for hit in db_response.body['hits']['hits']]
+
+def get_post_texts(posts: list[dict[str, any]]) -> list[str]:
+    """Get post texts
+
+    Args:
+        posts: List of Posts
+
+    Returns: List of Post Texts
+    """
+    return [post['body'] for post in posts]
+```
+
+```{python}
+db_response = data_retrieval.search_data(index="reddit_posts", q="*", size=3)
+posts = get_posts(db_response)
+post_texts = get_post_texts(posts)
+print(post_texts)
+```
+
+```{python}
+embeddings = embedding.embed(LOGGER, post_texts)
+print(embeddings)
+```
+
