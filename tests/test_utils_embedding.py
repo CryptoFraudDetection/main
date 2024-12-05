@@ -56,10 +56,10 @@ def test_cos_sim():
     LOGGER.debug(f"Cosine similarity of {text}: {cos_sim}")
     
     assert cos_sim is not None
-    assert cos_sim > 0.9
+    assert cos_sim > 0.95
 
 def test_long_text_embedding():
-    """Test embedding of a long text."""
+    """Test embedding of long texts."""
     sentence = "This is a test sentence."
     
     text = [" ".join([sentence] * n) for n in (1_000, 1_000_000)]
@@ -72,6 +72,24 @@ def test_long_text_embedding():
     assert len(embedded_text) == 2
     for x in embedded_text:
         assert len(x) > 0
+        
+def test_sim_long_text_embedding():
+    """Test similarity of embeddings of long texts."""
+    sentence = "This is a test sentence."
+    
+    text = [" ".join([sentence] * n) for n in (1_000, 1_000_000)]
+    LOGGER.debug(f"Embedding long text. Text lengths: {[len(t) for t in text]}")
+    # prevent long debug output
+    info_logger = logger.Logger(name=__name__, level=LoggerMode.INFO, log_dir="../logs")
+    embedded_text = embedding.embed(logger_=info_logger, text=text)
+    cos_sim = embedding.cos_sim(embedded_text[0], embedded_text[1])
+    
+    assert embedded_text is not None
+    assert len(embedded_text) == 2
+    for x in embedded_text:
+        assert len(x) > 0
+    assert cos_sim is not None
+    assert cos_sim > 0.99
 
 if __name__ == '__main__':
     test_initialization()
@@ -80,3 +98,4 @@ if __name__ == '__main__':
     test_cos_sim()
     test_on_the_fly_embedding()
     test_long_text_embedding()
+    test_sim_long_text_embedding()
