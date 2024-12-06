@@ -82,7 +82,6 @@ def sentiment(texts:list[str], chat_bot: Callable[[str], str] | None = None, max
     Returns:
         A list of sentiment scores. Each score is an integer between 0 and max_score, or None if evaluation fails.
     """
-    
     if not chat_bot:
         chat_bot = get_chat_bot()
 

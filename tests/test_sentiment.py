@@ -2,7 +2,7 @@
 This module contains the tests for the scraper.comparitech module.
 """
 import CryptoFraudDetection.utils.logger as logger
-from CryptoFraudDetection import sentiment
+from CryptoFraudDetection.utils import sentiment
 from CryptoFraudDetection.utils.enums import LoggerMode
 
 logger_ = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
