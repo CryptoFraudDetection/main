@@ -8,3 +8,172 @@ import matplotlib.pyplot as plt
 import pandas as pd
 ```
 
+# Introduction
+## Objective
+### State the overarching goal of the project
+### Define specific questions or hypotheses to be explored through SNA
+
+## Scope
+### Define the boundaries of the analysis (e.g., time frame, data granularity)
+
+## Relevance to SNA
+### Discuss why this topic is suitable for SNA
+### Highlight potential insights or applications of the findings
+
+## Data Sources
+### List sources of data and their formats (e.g., API, CSV, JSON)
+### Mention any limitations or conditions tied to the data
+
+
+# Data Collection
+## Objective
+### Summarize the goal of collecting this data
+
+## Selection Criteria
+### Describe the factors considered while selecting datasets (e.g., attributes, volume, quality)
+
+## Methods Used
+### API usage or web scraping
+#### Describe API endpoints or scraping scripts
+#### Tools used (e.g., `requests`, `BeautifulSoup`)
+### Pre-existing datasets
+#### Mention the sources and any preprocessing required
+
+## Challenges and Solutions
+### Examples of issues encountered (e.g., data access restrictions, API rate limits)
+### Workarounds or adjustments made
+
+## Data Validation
+### Describe checks performed to ensure completeness and accuracy
+### Strategies for handling missing or inconsistent data
+
+## Raw Data Summary
+### Present a summary table (e.g., number of records, key fields)
+### Provide a brief description of important fields
+
+# Exploratory Data Analysis (EDA)
+## Initial Insights
+### Describe first impressions of the dataset
+
+## Data Cleaning
+### Steps taken to clean data (e.g., handling duplicates, standardizing formats)
+
+## Visual Exploration
+### Histograms, scatter plots, and other visualizations for understanding distributions
+
+## Statistical Analysis
+### Summarize key statistics (mean, median, mode, variance)
+
+## Missing Data Analysis
+### Identify missing values and their impact
+### Strategies for imputation or exclusion
+
+## Outliers
+### Discuss detection methods (e.g., box plots, z-scores)
+### How these were handled in the dataset
+
+## Tools and Automation
+### Summary of libraries/tools used for EDA (e.g., `pandas-profiling`, `Sweetviz`)
+### Include generated reports if applicable
+
+# Data Modeling
+## Network Design
+### Define the network type (e.g., directed, undirected, weighted)
+### Specify attributes for nodes and edges
+
+## Preprocessing
+### Steps for transforming raw data into a network-ready format
+
+## Graph Construction
+### Description of how the graph was built (e.g., adjacency matrix, edge list)
+
+## Graph Characteristics
+### Number of nodes and edges
+### Basic statistics (density, clustering coefficient)
+
+## Visualization
+### Initial network plots (e.g., using `NetworkX`, `Matplotlib`, Gephi)
+### Brief interpretation of the visualizations
+
+# Social Network Analysis
+## Overview of Analyses
+### List the types of analyses to be performed
+
+## Node-Level Metrics
+### Calculate and interpret Degree Centrality
+### Calculate and interpret Closeness Centrality
+### Calculate and interpret Betweenness Centrality
+### Calculate and interpret Eigenvector Centrality
+
+## Edge-Level Analysis
+### Identify and interpret important connections
+
+## Community Detection
+### Discuss methods used (e.g., Louvain, Girvan-Newman)
+### Visualize and interpret communities
+
+## Temporal or Dynamic Analysis
+### If applicable, analyze changes in the network over time
+
+## Sub-Networks
+### Identify key sub-networks
+### Discuss their relevance and characteristics
+
+## Comparisons
+### Compare multiple networks or perspectives within the same dataset
+
+## Visualization and Interpretation
+### Highlight key findings with clear visual aids
+### Relate findings to the original research question
+
+# Results and Interpretation
+## Key Findings
+### Summarize the main results from the analyses
+
+## Insights
+### Discuss how these results address the research questions or hypotheses
+
+## Real-World Implications
+### Explain the significance of these findings in a broader context
+
+## Evaluation
+### Assess the quality of the data and analyses
+
+## Limitations
+### Acknowledge shortcomings of the data or methods
+
+# Outlook
+## Future Work
+### Suggest extensions or improvements to the project
+
+## Unanswered Questions
+### Highlight potential areas of exploration
+
+## Data Enhancements
+### Discuss additional data sources or attributes that could enrich the analysis
+
+# Lessons Learned
+## Project Highlights
+### Reflect on successes and innovative solutions
+
+## Challenges
+### Discuss difficulties faced and lessons drawn
+
+## Recommendations
+### Propose best practices for similar projects in the future
+
+# Appendices
+## Code and Scripts
+### Include all relevant scripts used for the project
+
+## Raw Data Samples
+### Attach examples of the raw dataset
+
+## Graph Outputs
+### Save and display network outputs (e.g., CSVs, Gephi files)
+
+## Additional Visualizations
+### Supplementary charts or tables
+
+## References
+### Cite all external sources and tools used
