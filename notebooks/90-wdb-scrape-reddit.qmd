@@ -211,8 +211,6 @@ for subquery in elasticquery_subreddits:
         continue
 
     scraped_subreddits_posts.append([subquery,total_hits])
-
-
 ```
 ```{python}
 def visualize_subreddit_counts(scraped_subreddits_posts):
@@ -279,7 +277,7 @@ def get_timeline_data(index,q):
 
 def process_data(data):
     '''
-    process the data from elasticsearch
+    process the data from elasticsearch: Group by subreddit and date, then count posts
 
     Args:
         data: data from elasticsearch
