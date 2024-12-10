@@ -20,34 +20,28 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
-    "setuptools==70.0.0",
-    "pytest==8.3.3",
-    "black[jupyter]==24.8.0",
-    "selenium==4.25.0",
-    "elasticsearch==8.15.1",
-    "pandas==2.2.3",
-    "torch==2.5.0",
-    "wandb==0.18.5",
-    "python-dotenv==1.0.1",
-    "praw==7.8.1",
-    "tqdm==4.67.1",
-    "altair==5.4.1",
-    "matplotlib==3.9.2",
-    "seaborn==0.13.2",
-    "ruff==0.8.0",
-    "beautifulsoup4==4.12.3",
-    "openai==1.55.2",
-    "transformers===4.46.3 ",
-    "openai==1.55.2",
-    "jupyterlab==4.3.3",
-    "notebook==7.3.1",
+  "setuptools==70.0.0",
+  "pytest==8.3.3",
+  "black[jupyter]==24.8.0",
+  "selenium==4.25.0",
+  "elasticsearch==8.15.1",
+  "pandas==2.2.3",
+  "torch==2.5.0",
+  "wandb==0.18.5",
+  "python-dotenv==1.0.1",
+  "praw==7.8.1",
+  "tqdm==4.67.0",
+  "altair==5.4.1",
+  "matplotlib==3.9.2",
+  "seaborn==0.13.2",
+  "ruff==0.8.0",
+  "beautifulsoup4==4.12.3",
+  "openai==1.55.2",
+  "transformers===4.46.3 ",
+  "jupyterlab==4.3.3",
+  "notebook==7.3.1",
 ]
 
 [project.urls]
 Homepage = "https://github.com/CryptoFraudDetection/main"
 Issues = "https://github.com/CryptoFraudDetection/main/issues"
-
-[tool.ruff]
-line-length = 79
-lint.select = ["ALL"]
-lint.ignore = ["D211", "D203", "D212", "S311"]
