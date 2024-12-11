@@ -8,33 +8,28 @@ from collections import defaultdict
 
 import pandas as pd
 import swifter  # noqa: F401
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
+from sklearn.naive_bayes import MultinomialNB
+from tqdm.notebook import tqdm
 ```
 
 ```{python}
-MIN_COMMENTS_PER_SUBSET = 10
-N_OF_SPLITS_PER_SUBSET = 10
+MIN_COMMENTS_PER_SUBSET = 50
+N_OF_SPLITS_PER_SUBSET = 50
 ```
 
 ```{python}
 df_reddit = pd.read_parquet("../data/processed/reddit_posts.parquet")
-df_reddit["created"] = pd.to_datetime(
-    df_reddit["created"],
-    format="%Y-%m-%d %H:%M:%S",
-)
-df_reddit["edited"] = pd.to_datetime(
-    df_reddit["edited"],
-    format="%Y-%m-%d %H:%M:%S",
-)
+df_reddit["created"] = pd.to_datetime(df_reddit["created"], format="%Y-%m-%d %H:%M:%S")
+df_reddit["edited"] = pd.to_datetime(df_reddit["edited"], format="%Y-%m-%d %H:%M:%S")
 
 df_reddit.head(1)
 ```
 
 ```{python}
 df_coins = pd.read_json("../data/raw/coins.json")
-df_coins["start_date"] = pd.to_datetime(
-    df_coins["start_date"],
-    format="ISO8601",
-)
+df_coins["start_date"] = pd.to_datetime(df_coins["start_date"], format="ISO8601")
 df_coins["end_date"] = pd.to_datetime(df_coins["end_date"], format="ISO8601")
 df_coins = df_coins.set_index("name")
 
@@ -55,12 +50,7 @@ def get_number_of_comments_per_coin(name: str, cutoff_date: str) -> int:
 
     """
     cutoff_date = pd.to_datetime(cutoff_date, format="%Y-%m-%d")
-    return len(
-        df_reddit[
-            (df_reddit["search_query"] == name)
-            & (df_reddit["created"] <= cutoff_date)
-        ],
-    )
+    return len(df_reddit[(df_reddit["search_query"] == name) & (df_reddit["created"] <= cutoff_date)])
 
 
 def get_first_comment_date(name: str) -> str:
@@ -89,9 +79,7 @@ def get_last_comment_date(name: str) -> str:
 
     """
     mod_df_reddit = df_reddit.copy()
-    mod_df_reddit["edited"] = mod_df_reddit["edited"].fillna(
-        mod_df_reddit["created"],
-    )
+    mod_df_reddit["edited"] = mod_df_reddit["edited"].fillna(mod_df_reddit["created"])
     return mod_df_reddit[mod_df_reddit["search_query"] == name]["edited"].max()
 
 
@@ -138,11 +126,7 @@ def is_comment_valid_row(row: pd.Series) -> bool:
 
     comment_date = row.edited if pd.notna(row.edited) else row.created
     start_date_valid = comment_date >= coin["start_date"]
-    end_date_valid = (
-        comment_date <= coin["end_date"]
-        if pd.notna(coin["end_date"])
-        else True
-    )
+    end_date_valid = comment_date <= coin["end_date"] if pd.notna(coin["end_date"]) else True
 
     return start_date_valid and end_date_valid
 ```
@@ -172,39 +156,138 @@ unique_train_coins = train_df["search_query"].unique().tolist()
 ```
 
 ```{python}
+# Create subsets
 list_subsets = []
 for coin in unique_train_coins:
+    # Get metadata for the coin
     metadata_coin = get_coin_info(coin).copy()
     metadata_coin["start_date"] = get_first_comment_date(coin)
     metadata_coin["end_date"] = get_last_comment_date(coin)
 
+    # Create N_OF_SPLITS_PER_SUBSET splits
     for _ in range(N_OF_SPLITS_PER_SUBSET):
         successful_split = False
         while not successful_split:
-            # random date between start and end date of the coin
-            random_day_diff = random.randint(
-                0,
-                (metadata_coin["end_date"] - metadata_coin["start_date"]).days,
-            )
-            random_date = metadata_coin["start_date"] + pd.Timedelta(
-                days=random_day_diff,
-            )
+            # Get a random date between the start and end date
+            random_day_diff = random.randint(0, (metadata_coin["end_date"] - metadata_coin["start_date"]).days)
+            random_date = metadata_coin["start_date"].date() + pd.Timedelta(days=random_day_diff)
 
-            # check if the number of comments for the coin is greater than the
-            #  set minimum
-            if (
-                get_number_of_comments_per_coin(coin, random_date)
-                > MIN_COMMENTS_PER_SUBSET
-            ):
+            # Check if there are enough comments for the subset to be valid
+            if get_number_of_comments_per_coin(coin, random_date) > MIN_COMMENTS_PER_SUBSET:
                 successful_split = True
 
-        list_subsets.append(
+        # Append the subset to the list
+        list_subsets.append({"coin": coin, "split_date": random_date, "fraud": metadata_coin["fraud"]})
+```
+
+```{python}
+# Drop duplicates
+df_subsets = pd.DataFrame(list_subsets)
+df_subsets = df_subsets.drop_duplicates()
+df_subsets
+```
+
+```{python}
+df_subsets.coin.value_counts()
+```
+
+```{python}
+vectorizer = CountVectorizer(
+    stop_words="english",
+    analyzer="word",
+    lowercase=True,
+)
+
+vectorizer.fit(df_reddit["body"])
+```
+
+```{python}
+def get_text_from_split(data: pd.DataFrame, split_date: str, coin: str) -> str:
+    """
+    Get the text data for a given coin and split date.
+
+    Args:
+        data (pd.DataFrame): The dataframe containing the data.
+        split_date (str): The split date.
+        coin (str): The coin name.
+
+    Returns:
+        str: The text data for the given coin and split date
+
+    """
+    split_date = pd.to_datetime(split_date, format="%Y-%m-%d")
+
+    data = data.copy()
+    data["edited"] = data["edited"].fillna(data["created"])
+    data = data[data["search_query"] == coin]
+    data = data[data["edited"] <= split_date]
+    return data["body"].str.cat(sep=" ")
+```
+
+```{python}
+# LOOCV based on each coin
+metrics = defaultdict(dict)
+
+for i, coin in tqdm(enumerate(df_subsets.coin.unique()), total=len(df_subsets.coin.unique())):
+    # Get the fitting and validation splits
+    fit_df = df_subsets[df_subsets["coin"] != coin]
+    val_df = df_subsets[df_subsets["coin"] == coin]
+
+    # Get the fitting data
+    list_fitting_data = []
+    for _, row in fit_df.iterrows():
+        list_fitting_data.append(
             {
-                "coin": coin,
-                "split_date": random_date,
+                "coin": row["coin"],
+                "split_date": row["split_date"],
+                "text": get_text_from_split(train_df, row["split_date"], row["coin"]),
+                "fraud": row["fraud"],
             },
         )
 
-print(list_subsets)
+    # Get the validation data
+    list_validation_data = []
+    for _, row in val_df.iterrows():
+        list_validation_data.append(
+            {
+                "coin": row["coin"],
+                "split_date": row["split_date"],
+                "text": get_text_from_split(train_df, row["split_date"], row["coin"]),
+                "fraud": row["fraud"],
+            },
+        )
+
+    # Create the fitting and validation dataframes
+    df_fitting = pd.DataFrame(list_fitting_data)
+    df_validation = pd.DataFrame(list_validation_data)
+    del list_fitting_data
+    del list_validation_data
+
+    # fitting Multinomial Naive Bayes
+    clf = MultinomialNB()
+    X_fitting = vectorizer.transform(df_fitting["text"])
+    y_fitting = df_fitting["fraud"]
+    clf.fit(X_fitting, y_fitting)
+
+    # Predicting the validation set
+    X_validation = vectorizer.transform(df_validation["text"])
+    y_validation = df_validation["fraud"].values
+    y_pred = clf.predict(X_validation)
+
+    # calculating metrics for left out coin
+    metrics[i] = (
+        {
+            "coin_left_out": coin,
+            "accuracy": accuracy_score(y_validation, y_pred),
+        },
+    )
+
+    # deleting dataframes to free up memory
+    del df_fitting
+    del df_validation
+```
+
+```{python}
+metrics
 ```
 
