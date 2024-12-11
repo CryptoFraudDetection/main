@@ -38,6 +38,9 @@ dependencies = [
     "beautifulsoup4==4.12.3",
     "openai==1.55.2",
     "transformers===4.46.3 ",
+    "numpy==2.0.0",
+    "scikit-learn==1.5.2",
+    "umap-learn==0.5.7",
 ]
 
 [project.urls]
