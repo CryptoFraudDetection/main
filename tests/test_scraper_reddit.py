@@ -1,5 +1,7 @@
 """
 This module contains the tests for the scraper.comparitech module.
+
+This tests should be run on a local machine, as tney take for ever on github actions.
 """
 
 import os
@@ -21,8 +23,8 @@ def test_initialization():
     finally:
         scraper.quit()
 
-@pytest.mark.xfail(
-    condition=os.getenv("GITHUB_ACTIONS") == "true",
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
     reason="Fails on GitHub due to headless browser issues or anti-bot measures",
 )
 def test__extract_all_comments():
@@ -46,8 +48,8 @@ def test__extract_all_comments():
     finally:
         scraper.quit()
 
-@pytest.mark.xfail(
-    condition=os.getenv("GITHUB_ACTIONS") == "true",
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
     reason="Fails on GitHub due to headless browser issues or anti-bot measures",
 )
 def test_scrape_post_content():
@@ -65,8 +67,8 @@ def test_scrape_post_content():
     finally:
         scraper.quit()
 
-@pytest.mark.xfail(
-    condition=os.getenv("GITHUB_ACTIONS") == "true",
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
     reason="Fails on GitHub due to headless browser issues or anti-bot measures",
 )
 def test_get_multipage_post_list():
@@ -82,8 +84,8 @@ def test_get_multipage_post_list():
     finally:
         scraper.quit()
 
-@pytest.mark.xfail(
-    condition=os.getenv("GITHUB_ACTIONS") == "true",
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
     reason="Fails on GitHub due to headless browser issues or anti-bot measures",
 )
 def test_get_multipage_post_list_with_start_date():
@@ -96,8 +98,8 @@ def test_get_multipage_post_list_with_start_date():
     finally:
         scraper.quit()
 
-@pytest.mark.xfail(
-    condition=os.getenv("GITHUB_ACTIONS") == "true",
+@pytest.mark.skipif(
+    os.getenv("GITHUB_ACTIONS") == "true",
     reason="Fails on GitHub due to headless browser issues or anti-bot measures",
 )
 def test_scrape():
@@ -106,13 +108,12 @@ def test_scrape():
     """
     try:
         scraper = RedditScraper(logger_)
-        scraper.start_driver()
         df = scraper.scrape('r/CryptoCurrency', 'Terra Luna', limit=101)
         assert df is not None
         assert len(df) == 101
     finally:
         scraper.quit()
-    
+
 if __name__ == '__main__':
     test_initialization()
     test__extract_all_comments()
