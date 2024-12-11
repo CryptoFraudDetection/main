@@ -7,7 +7,23 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import json
+import os
+from tqdm.notebook import tqdm
+from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+from scipy.spatial.distance import pdist
+from sklearn.metrics.pairwise import cosine_similarity
+import matplotlib.patches as mpatches
+import umap
+import numpy as np
 
+from CryptoFraudDetection.utils import embedding
+from CryptoFraudDetection.utils import enums
+from CryptoFraudDetection.utils import logger
+```
+
+```{python}
+LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.INFO, log_dir="../logs")
 ```
 
 ```{python}
@@ -17,6 +33,43 @@ df.head(5)
 
 ```{python}
 df["searchkeyword"].value_counts()
+```
+
+```{python}
+#sum of na in every col
+
+df.isna().sum()
+```
+
+```{python}
+#empty strings in every col
+
+(df == "").sum()
+```
+
+```{python}
+#pritn every user with empty string in username
+
+df[df["username"] == ""]
+```
+
+```{python}
+#print empty tweets
+
+df[df["tweet"] == ""]
+```
+
+```{python}
+empty_string_counts = df[df['tweet'] == ''].groupby('searchkeyword').size()
+
+for keyword, count in empty_string_counts.items():
+    print(f"{keyword}: {count} leere Strings im Tweet-Feld")
+```
+
+```{python}
+#delete empty strings in tweet
+
+df = df[df["tweet"] != ""]
 ```
 
 ```{python}
@@ -72,3 +125,327 @@ plt.show()
 ```
 
 This plot shows the count of Tweets per Coin in the scraped X Dataset. Some Coins have not that much Tweets, but thats because they also have a shorter Price-Timeseries which we use as start and enddate for scraping.
+
+```{python}
+output_file = "../data/processed/x_posts_embeddings.parquet"
+
+tqdm.pandas(desc="Embedding Progress")
+
+embedder = embedding.Embedder(LOGGER)
+
+def generate_embeddings(df):
+    tweets = df['tweet'].tolist()
+    
+    embeddings = embedder.embed(tweets)
+    
+    df['embedding'] = embeddings
+    return df
+
+if not os.path.exists(output_file):
+    print("Die Datei existiert nicht. Berechne Embeddings...")
+    df = generate_embeddings(df)
+    keyword_to_coin = {
+    'Bitcoin': 'Bitcoin',
+    'Ethereum': 'Ethereum',
+    'Chainlink': 'Chainlink',
+    'thorchain': 'THORChain',
+    '$Atom': 'Cosmos',
+    'Bitforex': 'BitForex',
+    '$Avax': 'Avalanche',
+    'Terra Luna': 'Terra Luna',
+    '$FTT': 'FTX Token',
+    'Safemoon': 'Safe Moon',
+    '$STA': 'STOA Network',
+    'Beercoin': 'BeerCoin',
+    'Teddy Doge': 'Teddy Doge'
+}
+
+    # Werte in der Spalte 'searchkeyword' ersetzen
+    df['searchkeyword'] = df['searchkeyword'].replace(keyword_to_coin)
+    df.to_parquet(output_file)
+    print(f"Embeddings gespeichert unter: {output_file}")
+else:
+    print(f"Datei existiert bereits: {output_file}. Lade die Datei...")
+    df = pd.read_parquet(output_file)
+    print("DataFrame erfolgreich geladen.")
+```
+
+```{python}
+
+df.head(5)
+```
+
+```{python}
+df.columns
+```
+
+```{python}
+coin_test = ['FTX Token', 'Safe Moon', 'Ethereum', 'Cosmos']
+
+#cut out test coins
+
+df = df[~df['searchkeyword'].isin(coin_test)]
+```
+
+```{python}
+
+with open('../data/raw/coins.json', 'r') as f:
+    coins_data = json.load(f)
+
+coins_info_df = pd.DataFrame(coins_data)
+
+
+
+
+
+merged_df = df.merge(coins_info_df, left_on="searchkeyword", right_on="name", how="left")
+
+embeddings = np.vstack(merged_df["embedding"].values)
+fraud_labels = merged_df["fraud"]
+```
+
+```{python}
+
+pca = PCA(n_components=2)
+embeddings_pca = pca.fit_transform(embeddings)
+
+umap_reducer = umap.UMAP(n_components=2, random_state=42, metric='cosine')
+embeddings_umap = umap_reducer.fit_transform(embeddings)
+```
+
+```{python}
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+colors = ['red' if fraud else 'blue' for fraud in fraud_labels]
+
+axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], c=colors, alpha=0.25, edgecolor='k')
+axes[0].set_title("PCA of Embeddings")
+axes[0].set_xlabel("PCA Component 1")
+axes[0].set_ylabel("PCA Component 2")
+
+axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], c=colors, alpha=0.15, edgecolor='k')
+axes[1].set_title("UMAP of Embeddings")
+axes[1].set_xlabel("UMAP Dimension 1")
+axes[1].set_ylabel("UMAP Dimension 2")
+
+fraud_legend = [
+    plt.Line2D([0], [0], marker='o', color='w', label='Fraud', markerfacecolor='red', markersize=10),
+    plt.Line2D([0], [0], marker='o', color='w', label='Non-Fraud', markerfacecolor='blue', markersize=10)
+]
+fig.legend(handles=fraud_legend, loc="upper right")
+
+plt.tight_layout()
+plt.show()
+
+```
+
+Here we can see the embeddings plottet as pca and umap top 2 componnents. The color represents if the tweet was about a scam or non scam coin.There are clusters of Scam and non-Scam Embeddings visible, but it could be that these are just Tweets about the same coin.
+
+```{python}
+
+
+coin_labels = merged_df["searchkeyword"].values
+unique_coins = np.unique(coin_labels)
+coin_colors = {coin: plt.cm.tab10(i / len(unique_coins)) for i, coin in enumerate(unique_coins)}
+colors = [coin_colors[coin] for coin in coin_labels]
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], c=colors, alpha=0.1, edgecolor='k')
+axes[0].set_title("PCA of Embeddings")
+axes[0].set_xlabel("PCA Component 1")
+axes[0].set_ylabel("PCA Component 2")
+
+axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], c=colors, alpha=0.1, edgecolor='k')
+axes[1].set_title("UMAP of Embeddings")
+axes[1].set_xlabel("UMAP Dimension 1")
+axes[1].set_ylabel("UMAP Dimension 2")
+
+legend_elements = [
+    plt.Line2D([0], [0], marker='o', color='w', label=coin, markerfacecolor=coin_colors[coin], markersize=10)
+    for coin in unique_coins
+]
+fig.legend(handles=legend_elements, loc="upper right", title="Coins")
+
+plt.tight_layout()
+plt.show()
+```
+
+Here we can see the same plot but with the color representing the coin. We can see that the embeddings are clustered by coin. So its not directly possible to say that the embeddings are clustered by scam or non scam.
+
+```{python}
+
+unique_keywords = df['searchkeyword'].unique()
+
+for keyword in unique_keywords:
+    keyword_df = df[df['searchkeyword'] == keyword]
+    
+    embeddings = np.vstack(keyword_df['embedding'].values)
+
+    pca = PCA(n_components=2)
+    embeddings_pca = pca.fit_transform(embeddings)
+
+    umap_reducer = umap.UMAP(n_components=2, metric='cosine', random_state=42)
+    embeddings_umap = umap_reducer.fit_transform(embeddings)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], alpha=0.7, edgecolor='k')
+    axes[0].set_title(f"PCA of Embeddings for {keyword}")
+    axes[0].set_xlabel("PCA Component 1")
+    axes[0].set_ylabel("PCA Component 2")
+
+    axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], alpha=0.7, edgecolor='k')
+    axes[1].set_title(f"UMAP of Embeddings for {keyword}")
+    axes[1].set_xlabel("UMAP Dimension 1")
+    axes[1].set_ylabel("UMAP Dimension 2")
+
+    plt.tight_layout()
+    plt.show()
+```
+
+here we can see the same but for every coin by itself. Scam Coins tend to have a more dense cluster of embeddings, but then many clusters. Non Scam coins have only one big cluster but with many outliers. But its also just an tendency and some scam coins have only one cluster and some non scam coins have many clusters.
+
+```{python}
+unique_keywords = df['searchkeyword'].unique()
+
+def calculate_metrics(embeddings):
+    pairwise_distances = pdist(embeddings, metric='cosine')
+    avg_pairwise_distance = pairwise_distances.mean()
+
+    knn = NearestNeighbors(n_neighbors=12)
+    knn.fit(embeddings)
+    distances, _ = knn.kneighbors(embeddings)
+    avg_local_density = distances.mean()
+
+    multivariate_std = np.std(embeddings, axis=0).mean()
+
+    return avg_pairwise_distance, avg_local_density, multivariate_std
+
+with open('../data/raw/coins.json', 'r') as f:
+    coins_data = json.load(f)
+
+coins_info_df = pd.DataFrame(coins_data)
+
+merged_df = df.merge(coins_info_df[['name', 'fraud']], left_on="searchkeyword", right_on="name", how="left")
+
+if 'fraud' not in merged_df.columns:
+    print("Die 'fraud'-Spalte konnte nicht hinzugefügt werden. Bitte überprüfen Sie die Zuordnung.")
+
+unique_keywords = merged_df['searchkeyword'].unique()
+metrics_data = []
+
+for keyword in unique_keywords:
+    keyword_df = merged_df[merged_df['searchkeyword'] == keyword]
+
+    fraud_values = keyword_df[keyword_df['fraud'] == True]['embedding'].values
+    non_fraud_values = keyword_df[keyword_df['fraud'] == False]['embedding'].values
+
+    if len(fraud_values) > 0:
+        fraud_embeddings = np.vstack(fraud_values)
+        fraud_metrics = calculate_metrics(fraud_embeddings)
+    else:
+        fraud_metrics = (0, 0, 0)
+
+    if len(non_fraud_values) > 0:
+        non_fraud_embeddings = np.vstack(non_fraud_values)
+        non_fraud_metrics = calculate_metrics(non_fraud_embeddings)
+    else:
+        non_fraud_metrics = (0, 0, 0)
+
+    metrics_data.append({
+        'keyword': keyword,
+        'fraud': fraud_metrics,
+        'non_fraud': non_fraud_metrics
+    })
+
+fig, axes = plt.subplots(3, 1, figsize=(12, 18))
+
+metric_names = ['Average Pairwise Distance', 'Average Local Density', 'Multivariate Standard Deviation']
+
+for i, metric_name in enumerate(metric_names):
+    fraud_values = [entry['fraud'][i] for entry in metrics_data]
+    non_fraud_values = [entry['non_fraud'][i] for entry in metrics_data]
+    keywords = [entry['keyword'] for entry in metrics_data]
+
+    bar_width = 0.4
+    x = np.arange(len(keywords))
+
+    axes[i].bar(x - bar_width / 2, fraud_values, width=bar_width, label='Fraud', color='red', alpha=0.7)
+    axes[i].bar(x + bar_width / 2, non_fraud_values, width=bar_width, label='Non-Fraud', color='blue', alpha=0.7)
+
+    axes[i].set_title(metric_name)
+    axes[i].set_xticks(x)
+    axes[i].set_xticklabels(keywords, rotation=45, ha='right')
+    axes[i].set_ylabel('Value')
+    axes[i].legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+In these plots we can see some Metrics of the Embeddings like Average Pairwise distance or Density...  Its visible, that scam coins are a little bit denser but its not that much of a difference and not a overall rule.
+
+```{python}
+
+
+def max_similar_embeddings_normalized(embeddings, similarity_threshold=0.95):
+    similarity_matrix = cosine_similarity(embeddings)
+    np.fill_diagonal(similarity_matrix, 0)
+    similar_counts = np.sum(similarity_matrix > similarity_threshold, axis=1)
+    return similar_counts.max() / len(embeddings)
+
+unique_keywords = merged_df['searchkeyword'].unique()
+similarity_data = []
+
+for keyword in unique_keywords:
+    keyword_df = merged_df[merged_df['searchkeyword'] == keyword]
+    embeddings = np.vstack(keyword_df['embedding'].values)
+    
+    max_similar_count_normalized = max_similar_embeddings_normalized(embeddings, similarity_threshold=0.9)
+    
+    similarity_data.append({
+        'keyword': keyword,
+        'max_similar_embeddings_normalized': max_similar_count_normalized
+    })
+sorted_data = sorted(
+    similarity_data,
+    key=lambda x: x['max_similar_embeddings_normalized'],
+    reverse=True
+)
+
+sorted_keywords = [entry['keyword'] for entry in sorted_data]
+sorted_max_similar_values_normalized = [
+    entry['max_similar_embeddings_normalized'] for entry in sorted_data
+]
+
+sorted_is_scam = [
+    coins_info_df[coins_info_df['name'] == keyword]['fraud'].iloc[0]
+    for keyword in sorted_keywords
+]
+
+sorted_colors = ['red' if scam else 'blue' for scam in sorted_is_scam]
+
+plt.figure(figsize=(12, 6))
+plt.bar(
+    sorted_keywords,
+    sorted_max_similar_values_normalized,
+    color=sorted_colors,
+    alpha=0.7
+)
+plt.title("Normierte maximale Anzahl ähnlicher Embeddings pro Coin (nach Wert sortiert)")
+plt.xlabel("Coin")
+plt.ylabel("Normierte maximale Anzahl ähnlicher Embeddings")
+plt.xticks(rotation=45, ha='right')
+
+red_patch = mpatches.Patch(color='red', label='Scam')
+blue_patch = mpatches.Patch(color='blue', label='Non-Scam')
+plt.legend(handles=[red_patch, blue_patch])
+
+plt.tight_layout()
+plt.show()
+```
+
+Here we can see the max embeddings which are near to ech other (cosine sim over 0.95) normalised with count of all embeddings. It is very clear visible, that Scam coins tend to have more similar embeddings than non scam coins. But again its not a very clear rule (Avalanche)
+
