@@ -113,6 +113,7 @@ class RedditScraper:
                     try:
                         # Read the proxy list from the given URL
                         self._proxy_list = pd.read_csv(link)
+                        break  # Success
                     except Exception as e:
                         self._logger.warning(f"Error fetching proxy list: {e}")
         
