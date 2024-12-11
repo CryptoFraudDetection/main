@@ -156,6 +156,9 @@ unique_train_coins = train_df["search_query"].unique().tolist()
 ```
 
 ```{python}
+# Seed for reproducibility
+random.seed(42)
+
 # Create subsets
 list_subsets = []
 for coin in unique_train_coins:
@@ -198,7 +201,11 @@ vectorizer = CountVectorizer(
     lowercase=True,
 )
 
-vectorizer.fit(df_reddit["body"])
+vectorizer.fit(train_df["body"])
+```
+
+```{python}
+print("Number of features:", len(vectorizer.vocabulary_))
 ```
 
 ```{python}
@@ -271,7 +278,7 @@ for i, coin in tqdm(enumerate(df_subsets.coin.unique()), total=len(df_subsets.co
 
     # Predicting the validation set
     X_validation = vectorizer.transform(df_validation["text"])
-    y_validation = df_validation["fraud"].values
+    y_validation = df_validation["fraud"].to_numpy()
     y_pred = clf.predict(X_validation)
 
     # calculating metrics for left out coin
@@ -279,8 +286,11 @@ for i, coin in tqdm(enumerate(df_subsets.coin.unique()), total=len(df_subsets.co
         {
             "coin_left_out": coin,
             "accuracy": accuracy_score(y_validation, y_pred),
+            "confusion_matrix": confusion_matrix(y_validation, y_pred),
         },
     )
+
+    # idea: for each coin, visualize until which date the model is able to predict frauds
 
     # deleting dataframes to free up memory
     del df_fitting
