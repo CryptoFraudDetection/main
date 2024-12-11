@@ -184,4 +184,3 @@ data/reddit/*json.lock
 
 # UV 
 uv.lock
-cx312/
