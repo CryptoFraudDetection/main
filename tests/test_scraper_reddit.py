@@ -108,9 +108,9 @@ def test_scrape():
     """
     try:
         scraper = RedditScraper(logger_)
-        df = scraper.scrape('r/CryptoCurrency', 'Terra Luna', limit=101)
-        assert df is not None
-        assert len(df) == 101
+        scraper.scrape('r/CryptoCurrency', 'Terra Luna', limit=101)
+        assert scraper.post_data is not None
+        assert len(scraper.post_data) == 101
     finally:
         scraper.quit()
 
