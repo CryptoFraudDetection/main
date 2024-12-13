@@ -53,6 +53,7 @@ def insert_dataframe(
         ]
 
     try:
+        logger.info(f"Inserting {len(data)} records into {index}...")
         response = bulk(client=es, actions=data, raise_on_error=False)
     except BulkIndexError as e:
         logger.handle_exception(

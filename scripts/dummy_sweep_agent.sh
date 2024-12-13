@@ -17,13 +17,10 @@ else
     exit 1
 fi
 
-# Install the required package in editable mode
-pip install -e .
-
 # Check if sweep ID is provided as an argument
 if [ -z "$1" ]; then
-    echo "No sweep ID provided. Running the initial command."
-    python scripts/dummy.py
+    echo "No sweep ID provided. This script expects a sweep ID."
+    exit 1
 else
     echo "Sweep ID provided: $1. Running with sweep ID."
     python scripts/dummy.py --sweep_id "$1"
