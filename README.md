@@ -53,14 +53,14 @@ Main repository for the project.
     ```
 3. Install the project:
     ```bash
-    make dev-install
+    pip install -e .
     ```
 4. Login to wandb:
     ```bash
     wandb login
     ```
     (Follow the instructions on the terminal)
-5. Initialize the sweep on your laptop or on Slurm:
+3. Initialize the sweep on your laptop or on Slurm:
     - Laptop: 
         ```bash
         python scripts/dummy.py
@@ -69,14 +69,33 @@ Main repository for the project.
         ```bash
         sbatch scripts/dummy.sh
         ```
-6. Add agents to the sweep:
+4. Add agents to the sweep (if needed):
     1. Get the sweep id from the log file from the previous step:
-        ```bash
-        cat logs/dummy*NNNN*.log
-        ```
-        (Replace `NNNN` with the batch number)
+        1. slurm:
+            ```bash
+            cat logs/dummy*NNNN*.log
+            ```
+            (Replace `NNNN` with the batch number)
+        2. laptop: sweep id is printed on the terminal
     2. Add agents to the sweep:
         ```bash
-        sbatch scripts/dummy.sh nod0ndel/dummy-model-sweep/_________
+        sbatch scripts/dummy_sweep_agent.sh nod0ndel/dummy-model-sweep/_________
         ```
         (Replace `_________` with the sweep id)
+5. Run Jupyter notebook on the cluster:
+
+    Run a jupyter server in the current directory with the following command:
+
+    ```bash
+    cd ~/code/github.com/CryptoFraudDetection/main
+    /cluster/common/jupyter/start-jupyter.sh -g 1 -c 12 -m 16384 -t 1-00:00:00 -d .
+    ```
+6. Connect to slave server with command on output
+6. Install packages in jupyterlab:
+    ```bash
+    !pip install -r requirements.txt
+    ```
+    or
+    ```bash
+    !pip install torch
+    ```
