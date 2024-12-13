@@ -1,19 +1,30 @@
 #!/bin/bash
-#SBATCH -p performance
-#SBATCH -t 0-01:00:00
-#SBATCH --gpus 1
-#SBATCH -J dummy_model
-#SBATCH -o logs/dummy_out_%j.log
-#SBATCH -e logs/dummy_err_%j.log
+#SBATCH --job-name=dummy_model          # Job name
+#SBATCH --error=logs/dummy_err_%j.log   # File to write standard error (%j expands to job ID)
+#SBATCH --output=logs/dummy_out_%j.log  # File to write standard output (%j expands to job ID)
+#SBATCH --partition=performance         # Partition to submit the job to
+#SBATCH --time=1-00:00:00               # Maximum runtime (d-hh:mm:ss)
+#SBATCH --cpus-per-task=12              # Number of CPU cores per task
+#SBATCH --mem=16GB                      # Memory required per node
+#SBATCH --gpus=1                        # Number of GPUs required
+#SBATCH --ntasks=1                      # Number of tasks (processes)
 
-# activate the virtual environment
-source .venv/bin/activate
+# Activate the virtual environment
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+else
+    echo "Error: Virtual environment (.venv) not found."
+    exit 1
+fi
+
+# Install the required package in editable mode
+pip install -e .
 
 # Check if sweep ID is provided as an argument
 if [ -z "$1" ]; then
-    # No sweep ID passed, run the initial command
+    echo "No sweep ID provided. Running the initial command."
     python scripts/dummy.py
 else
-    # Sweep ID passed, add agent to existing sweep
+    echo "Sweep ID provided: $1. Running with sweep ID."
     python scripts/dummy.py --sweep_id "$1"
 fi
