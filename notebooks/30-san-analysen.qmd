@@ -1,5 +1,10 @@
+---
+title: Setup
+jupyter: python3
+---
 
-## EDA
+
+
 ```{python}
 import numpy as np
 import altair as alt
@@ -9,14 +14,27 @@ import matplotlib.pyplot as plt
 alt.themes.enable("dark")
 ```
 
+Read data from parquet file:
+
 ```{python}
-df = pd.read_parquet("../data/processed/reddit_posts.parquet")
-df.head(5)
+df = pd.read_parquet("../data/processed/reddit.parquet")
 ```
+
+## EDA
+
+Glimpse of the data:
+
+```{python}
+df.sample(5, random_state=42)
+```
+
+Which coin appears how often in the data?
 
 ```{python}
 df["search_query"].value_counts()
 ```
+
+Overview of comments (answers to other people) per coin and subreddit:
 
 ```{python}
 subreddit_query = (
@@ -64,62 +82,9 @@ text = (
 c + text
 ```
 
-```{python}
-subreddit_query_normalized = subreddit_query.copy()
-posts_per_coin = subreddit_query_normalized.groupby("search_query")["value"].transform(
-    "sum"
-)
-subreddit_query_normalized["value"] /= posts_per_coin
+It's clearly visible that Bitcoin is the most popular coin and CryptoCurrency is the most popular subreddit. The interest is, how fraudulent and non-fraudulent coins differ in there social media activity. Some coins (like Teddy Doge and BeerCoin) have only a few comments.
 
-
-c = (
-    alt.Chart(subreddit_query_normalized)
-    .mark_rect()
-    .encode(
-        y=alt.Y("subreddit:N", title="Subreddit"),
-        x=alt.X("search_query:O", title="Coin"),
-        color=alt.Color(
-            "value:Q",
-            title="Number of Comments",
-            scale=alt.Scale(
-                range=["#ffffff", "#deecfb", "#bedaf7", "#7ab3ef", "#368ce7", "#1666ba"]
-            ),
-            legend=None,
-        ),
-        tooltip=[
-            alt.Tooltip("search_query:O", title="Coin"),
-            alt.Tooltip("subreddit:N", title="Subreddit"),
-            alt.Tooltip("value:Q", title=r"% of Comments", format=".4%"),
-        ],
-    )
-    .properties(
-        width=800,
-        height=800,
-        title=alt.Title(text="Number of Comments per Subreddit (Normalized by Coin)"),
-    )
-)
-
-text = (
-    alt.Chart(subreddit_query_normalized)
-    .mark_text(align="center")
-    .transform_calculate(customtooltip="datum.value")
-    .encode(
-        y=alt.Y("subreddit:N"),
-        x=alt.X("search_query:O"),
-        text=alt.Text("value:Q", format=".2%"),
-        color=alt.condition(
-            alt.datum.value >= 0.5, alt.value("white"), alt.value("black")
-        ),
-        tooltip=[
-            alt.Tooltip("search_query:O", title="Coin"),
-            alt.Tooltip("subreddit:N", title="Subreddit"),
-            alt.Tooltip("value:Q", title=r"% of Comments", format=".4%"),
-        ],
-    )
-)
-
-c + text
-```
+Overview of main posts per coin and subreddit:
 
 ```{python}
 subreddit_query_posts = (
@@ -168,61 +133,9 @@ text = (
 c + text
 ```
 
-```{python}
-subreddit_query_posts_normalized = subreddit_query_posts.copy()
-posts_per_coin = subreddit_query_posts_normalized.groupby("search_query")[
-    "value"
-].transform("sum")
-subreddit_query_posts_normalized["value"] /= posts_per_coin
+The distribution of posts is similar to the distribution of comments. Teddy Doge got only a few posts. This should not be an issue, as the comments (replies to other people) will be the edges in the graph.
 
-c = (
-    alt.Chart(subreddit_query_posts_normalized)
-    .mark_rect()
-    .encode(
-        y=alt.Y("subreddit:N", title="Subreddit"),
-        x=alt.X("search_query:O", title="Coin"),
-        color=alt.Color(
-            "value:Q",
-            title="Number of Posts",
-            scale=alt.Scale(
-                range=["#ffffff", "#deecfb", "#bedaf7", "#7ab3ef", "#368ce7", "#1666ba"]
-            ),
-            legend=None,
-        ),
-        tooltip=[
-            alt.Tooltip("search_query:O", title="Coin"),
-            alt.Tooltip("subreddit:N", title="Subreddit"),
-            alt.Tooltip("value:Q", title=r"% of Posts", format=".4%"),
-        ],
-    )
-    .properties(
-        width=800,
-        height=800,
-        title=alt.Title(text="Number of Posts per Subreddit (Normalized by Coin)"),
-    )
-)
-
-text = (
-    alt.Chart(subreddit_query_posts_normalized)
-    .mark_text(align="center")
-    .transform_calculate(customtooltip="datum.value")
-    .encode(
-        y=alt.Y("subreddit:N"),
-        x=alt.X("search_query:O"),
-        text=alt.Text("value:Q", format=".2%"),
-        color=alt.condition(
-            alt.datum.value > 0.7, alt.value("white"), alt.value("black")
-        ),
-        tooltip=[
-            alt.Tooltip("search_query:O", title="Coin"),
-            alt.Tooltip("subreddit:N", title="Subreddit"),
-            alt.Tooltip("value:Q", title=r"% of Posts", format=".4%"),
-        ],
-    )
-)
-
-c + text
-```
+How deeply nested are the comments (replies to other people)?
 
 ```{python}
 depth_df = df["depth"].value_counts().sort_index()
@@ -259,6 +172,10 @@ text = (
 c + text
 ```
 
+There are ~6k posts and most comments (~200k) are direct replies to the post. The distribution decreases ~exponentially and goes to 10 levels deep.
+
+How are the number of comments distributed per user?
+
 ```{python}
 comments_per_user = df.groupby("author").size()
 distribution = comments_per_user.value_counts().sort_index()
@@ -271,7 +188,7 @@ c = (
     .encode(
         x=alt.X(
             "comments_per_user:O",
-            title="Number of Comments per User",
+            title="Number of Comments per User (cut off at 100)",
             scale={"domain": range(1, 101)},
         ),
         y=alt.Y(
@@ -318,9 +235,15 @@ c = (
 c
 ```
 
+Most users have only a few comments (~70k have only one comment). There are some users with a lot of comments (cut off at 100). How extreme are the top users?
+
 ```{python}
 comments_per_user.sort_values(ascending=False).head(10)
 ```
+
+Some users have a lot of comments but they have `bot`, `auto` or `mod` in their name, which means that they are probably no human. They might be official bots from the subreddit for moderation purposes.
+
+Now lets see how the posts are distributed over the users:
 
 ```{python}
 posts_per_user = df.query("depth == -1").groupby("author").size()
@@ -334,12 +257,12 @@ c = (
     .encode(
         x=alt.X(
             "posts_per_user:O",
-            title="Number of Posts per User",
+            title="Number of Posts per User (cut off at 100)",
             scale={"domain": range(1, 101)},
         ),
         y=alt.Y(
             "number_of_users:Q",
-            title="Number of Posts",
+            title="Number of Users",
             scale=alt.Scale(
                 type="symlog",
                 domain=[0, 5_000],
@@ -378,9 +301,88 @@ c = (
 c
 ```
 
+The posts are distributed unevenly as well. ~3.6k users have only one post. Let's have a look at the top users (for posts):
+
 ```{python}
 posts_per_user.sort_values(ascending=False).head(10)
 ```
+
+Some users overlap with the top commenters. Examples: kirtash93, goldyluckinblokchain
+
+Let's have a look at the comment distribution over time per coin:
+
+```{python}
+posts_per_coin_per_date = df.copy()
+posts_per_coin_per_date["created"] = (
+    pd.to_datetime(posts_per_coin_per_date["created"])
+    .dt.to_period("M")
+    .dt.to_timestamp()
+)
+
+# Filter for comments with depth 0 to 9
+posts_per_coin_per_date = posts_per_coin_per_date.query(
+    "created >= '2020-01-01'"
+).query("depth >= 0 and depth <= 9")
+
+posts_per_coin_per_date = (
+    posts_per_coin_per_date.groupby(["search_query", "created"])["id"]
+    .count()
+    .reset_index()
+    .rename(columns={"id": "number_of_comments"})
+)
+
+posts_per_coin_per_date["number_of_comments_rel"] = posts_per_coin_per_date[
+    "number_of_comments"
+] / posts_per_coin_per_date.groupby("search_query")["number_of_comments"].transform("sum")
+
+step = 40
+overlap = 1
+
+c = (
+    alt.Chart(posts_per_coin_per_date, height=step)
+    .mark_area(
+        interpolate="monotone",
+        fillOpacity=0.5,
+        stroke="lightgray",
+        strokeWidth=0.5,
+    )
+    .encode(
+        x=alt.X("created:T").title("Date").axis(grid=False),
+        y=alt.Y("number_of_comments_rel:Q")
+        .axis(None)
+        .scale(range=[step, -step * overlap]),
+        color=alt.Color("search_query:N", legend=None),
+        tooltip=[
+            alt.Tooltip("yearmonth(created):T", title="Date"),
+            alt.Tooltip("search_query:N", title="Coin"),
+            alt.Tooltip("number_of_comments:Q", title="# of Comments"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=step,
+    )
+    .facet(
+        row=alt.Row("search_query:N")
+        .title(None)
+        .header(labelAngle=0, labelAlign="left")
+    )
+    .properties(
+        title=alt.Title(
+            text="Number of Comments per Coin per Date after 2020",
+            anchor="middle",
+        ),
+        bounds="flush",
+    )
+    .configure_facet(spacing=0)
+    .configure_view(stroke=None)
+    .configure_title(anchor="end")
+)
+
+c
+```
+
+Let's have a look at the comment distribution over time per coin:
 
 ```{python}
 posts_per_coin_per_date = df.copy()
@@ -451,7 +453,11 @@ c = (
     .configure_view(stroke=None)
     .configure_title(anchor="end")
 )
+
+c
 ```
+
+The plot is cut off at 2020 because there are not many posts or comments before that time (in relation to the rest of the data). Some cions have more data at the end of the timescale because we used google results to get the post URLs and google had probably some bais towards newer posts.
 
 # Introduction
 ## Objective
@@ -622,3 +628,4 @@ c = (
 
 ## References
 ### Cite all external sources and tools used
+
