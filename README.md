@@ -86,6 +86,10 @@ Main repository for the project.
     ```bash
     squeue -u $USER
     ```
+6. Check the logs:
+    ```bash
+    tail -f -n 100 logs/dummy*NNNN*.log
+    ```
 
 1. Run Jupyter notebook on the cluster:
 
