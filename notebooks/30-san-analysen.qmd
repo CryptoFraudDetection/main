@@ -14,6 +14,9 @@ import random
 from tqdm.notebook import tqdm
 from collections import Counter
 from community import community_louvain
+from networkx.algorithms.community import label_propagation_communities
+from networkx.algorithms.community.quality import modularity
+
 
 alt.themes.enable("dark")
 ```
@@ -77,6 +80,12 @@ df.head()
 ```
 
 Here we added a new column, parent_user, which is the author of the parent_id. This is important for the network, because we want to know who commented on who.
+
+```{python}
+#new column if word 'moon' nad one if word 'pump' in body
+df["moon"] = df["body"].str.contains("moon", case=False)
+df["pump"] = df["body"].str.contains("pump", case=False)
+```
 
 ```{python}
 depths = range(-1, 10)  # Tiefen von -1 bis 9
@@ -621,11 +630,14 @@ filtered_df = (
     .groupby("search_query")
     .head(500)
 )
+
 print(len(filtered_df))
 # Group by parent_user and author, summing up the scores
 user_edges = (
     filtered_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
 )
+
+
 
 # Add 1 to the summed scores for the edge weight
 user_edges["weight"] = user_edges["score"] + 1
@@ -633,21 +645,31 @@ user_edges["weight"] = user_edges["score"] + 1
 # Create a directed graph
 G_weighted = nx.DiGraph()
 
-# Add edges with calculated weights
-for _, row in tqdm(user_edges.iterrows()):
-    G_weighted.add_edge(row["parent_user"], row["author"], weight=row["weight"])
+# Add edges with calculated weights and search_query as an edge attribute
+for _, row in tqdm(filtered_df.iterrows(), desc="Building Graph"):
+    G_weighted.add_edge(
+        row["parent_user"], 
+        row["author"], 
+        weight=row["score"] + 1, 
+        search_query=row["search_query"],
+        moon=row["moon"],  # Add 'moon' as an edge attribute
+        pump=row["pump"]   # Add 'pump' as an edge attribute
+    )
+```
+
+```{python}
 
 plt.figure(figsize=(12, 10))
-pos = nx.spring_layout(G_weighted, seed=42)  # Layout for visual clarity
+pos = nx.spring_layout(G_weighted, seed=42, k=60, scale=3.0)
 
 # Draw nodes and edges
-nx.draw_networkx_nodes(G_weighted, pos, node_size=30, alpha=0.7)
-nx.draw_networkx_edges(G_weighted, pos, width=1.5, alpha=0.5, arrowstyle="->", arrowsize=10)
+nx.draw_networkx_nodes(G_weighted, pos, node_size=1, alpha=0.7)
+nx.draw_networkx_edges(G_weighted, pos, width=1, alpha=0.5, arrowstyle="->", arrowsize=8)
 
 edge_labels = nx.get_edge_attributes(G_weighted, "weight")
 for (u, v), label in edge_labels.items():
     x, y = (pos[u][0] + pos[v][0]) / 2, (pos[u][1] + pos[v][1]) / 2  # Midpoint of edge
-    plt.text(x, y, f"{label:.1f}", fontsize=8, color="black", alpha=0.9)
+    plt.text(x, y, f"{label:.1f}", fontsize=6, color="black", alpha=0.9)
 
 plt.title(
     "User Interaction Graph with Weighted Edges (Filtered by Score > 0 and Newest 500 per Search Query)",
@@ -658,31 +680,321 @@ plt.show()
 ```
 
 ```{python}
-tqdm_desc = "Louvain Clustering"
+G_undirected = G_weighted.to_undirected()
+
+# Perform Label Propagation Clustering on the undirected graph
+tqdm_desc = "Label Propagation Clustering"
 with tqdm(total=1, desc=tqdm_desc) as pbar:
-    partition = community_louvain.best_partition(G_weighted)
+    communities = list(label_propagation_communities(G_undirected))
     pbar.update(1)
 
-# Add the partition (cluster) to each node in the graph
-for node, cluster in partition.items():
-    G_weighted.nodes[node]['cluster'] = cluster
+# Assign communities to nodes
+node_community_mapping = {node: i for i, community in enumerate(communities) for node in community}
+for node, community in node_community_mapping.items():
+    G_undirected.nodes[node]['community'] = community
 
 # Display the number of clusters
-num_clusters = len(set(partition.values()))
-print(f"Louvain clustering completed: {num_clusters} clusters found.")
+num_clusters = len(communities)
+print(f"Label Propagation Clustering completed: {num_clusters} clusters found.")
+```
 
-# Visualize the clusters
+```{python}
+#print size of clusters
+cluster_sizes = Counter(node_community_mapping.values())
+#sort
+cluster_sizes = dict(sorted(cluster_sizes.items(), key=lambda x: x[1], reverse=True))
+print("Size of clusters:")
+print(cluster_sizes)
+```
+
+```{python}
+self_edges = [(u, v) for u, v in G_undirected.edges() if u == v]
+non_self_edges = [(u, v) for u, v in G_undirected.edges() if u != v]
+
+# Create subgraphs for self-references and non-self-references
+G_self = G_undirected.edge_subgraph(self_edges).copy()
+G_non_self = G_undirected.edge_subgraph(non_self_edges).copy()
+
+# Set up subplots
+fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+fig.suptitle("Self-references vs Non-self-references in User Interaction Graph (with Clusters)", fontsize=18)
+
+# Plot self-references with clusters
+ax = axes[0]
+pos_self = nx.spring_layout(G_self, seed=42, k=0.1)
+community_colors_self = [G_self.nodes[node]['community'] for node in G_self.nodes()]
+nx.draw_networkx_nodes(G_self, pos_self, node_size=50, alpha=0.8, ax=ax, node_color=community_colors_self, cmap=plt.cm.Set3)
+nx.draw_networkx_edges(G_self, pos_self, width=1.5, alpha=0.6, ax=ax)
+ax.set_title("Self-references (Edges on Themselves)", fontsize=16)
+ax.axis("off")
+
+# Plot non-self-references with clusters
+ax = axes[1]
+pos_non_self = nx.spring_layout(G_non_self, seed=42)
+community_colors_non_self = [G_non_self.nodes[node]['community'] for node in G_non_self.nodes()]
+nx.draw_networkx_nodes(G_non_self, pos_non_self, node_size=50, alpha=0.8, ax=ax, node_color=community_colors_non_self, cmap=plt.cm.Set3)
+nx.draw_networkx_edges(G_non_self, pos_non_self, width=1.5, alpha=0.6, ax=ax)
+ax.set_title("Non-self-references (Edges with No Self-references)", fontsize=16)
+ax.axis("off")
+
+plt.show()
+```
+
+```{python}
+cluster_sizes = Counter(nx.get_node_attributes(G_undirected, 'community').values())
+
+# Filter for clusters greater than size 2
+valid_clusters = {cluster for cluster, size in cluster_sizes.items() if size > 10}
+
+# Filter nodes belonging to valid clusters
+nodes_in_valid_clusters = [node for node in G_undirected.nodes if G_undirected.nodes[node]['community'] in valid_clusters]
+
+# Create a subgraph with only the valid clusters
+G_filtered = G_undirected.subgraph(nodes_in_valid_clusters).copy()
+
+# Plot the filtered graph
 plt.figure(figsize=(12, 10))
-pos = nx.spring_layout(G_weighted, seed=42)  # Layout for visual clarity
+pos = nx.spring_layout(G_filtered, k=0.1, seed=42)
 
-# Draw nodes with color by cluster
-cluster_colors = [partition[node] for node in G_weighted.nodes()]
-nx.draw_networkx_nodes(G_weighted, pos, node_size=700, alpha=0.8, node_color=cluster_colors, cmap=plt.cm.Set3)
-nx.draw_networkx_edges(G_weighted, pos, width=1.5, alpha=0.6, arrowstyle="->", arrowsize=15)
-nx.draw_networkx_labels(G_weighted, pos, font_size=12, font_color="black")
+# Draw nodes and edges
+community_colors = [G_filtered.nodes[node]['community'] for node in G_filtered.nodes()]
+nx.draw_networkx_nodes(G_filtered, pos, node_size=10, alpha=0.8, node_color=community_colors, cmap=plt.cm.Set3)
+nx.draw_networkx_edges(G_filtered, pos, width=1.5, alpha=0.6)
 
-plt.title("Louvain Clustering of User Interaction Graph", fontsize=16)
+plt.title("Filtered User Interaction Graph (Clusters with Size > 2)", fontsize=16)
 plt.axis("off")
+plt.show()
+```
+
+```{python}
+node_search_queries = {node: [] for node in G_undirected.nodes}
+
+# Collect search queries for each node based on connected edges
+for u, v, data in G_undirected.edges(data=True):
+    if "search_query" in data:
+        node_search_queries[u].append(data["search_query"])
+        node_search_queries[v].append(data["search_query"])
+
+# Assign the most common 'search_query' to each node
+for node, queries in node_search_queries.items():
+    most_common_query = Counter(queries).most_common(1)
+    G_undirected.nodes[node]["search_query"] = most_common_query[0][0] if most_common_query else "Unknown"
+
+# Identify clusters with size > 10
+cluster_sizes = Counter(nx.get_node_attributes(G_undirected, "community").values())
+valid_clusters = {cluster for cluster, size in cluster_sizes.items() if size > 10}
+
+# Filter nodes belonging to valid clusters
+nodes_in_valid_clusters = [
+    node for node in G_undirected.nodes 
+    if G_undirected.nodes[node]["community"] in valid_clusters
+]
+
+# Create a subgraph with only the valid clusters
+G_filtered = G_undirected.subgraph(nodes_in_valid_clusters).copy()
+
+# Assign colors based on 'search_query'
+search_query_colors = nx.get_node_attributes(G_filtered, "search_query")
+unique_queries = list(set(search_query_colors.values()))
+color_map = {query: idx for idx, query in enumerate(unique_queries)}
+color_values = [color_map[search_query_colors[node]] for node in G_filtered.nodes()]
+
+# Plot the filtered graph
+plt.figure(figsize=(12, 10))
+pos = nx.spring_layout(G_filtered, k=0.1)
+
+nx.draw_networkx_nodes(G_filtered, pos, node_size=10, alpha=0.8, node_color=color_values, cmap=plt.cm.tab20)
+nx.draw_networkx_edges(G_filtered, pos, width=1.5, alpha=0.6)
+
+plt.title("Filtered User Interaction Graph (Clusters with Size > 10, Colored by Search Query)", fontsize=16)
+plt.axis("off")
+plt.show()
+```
+
+```{python}
+search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values())
+
+# Create and plot a subgraph for each search query
+for search_query in search_queries:
+    # Filter edges with the current search query
+    edges_for_query = [
+        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+    ]
+
+    # Create a subgraph for the current search query
+    G_query = G_filtered.edge_subgraph(edges_for_query).copy()
+
+    # Get cluster colors for the nodes
+    cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
+    unique_clusters = list(set(cluster_colors))
+    cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
+    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+
+    # Plot the graph
+    plt.figure(figsize=(12, 10))
+    pos = nx.spring_layout(G_query, k=0.1)
+
+    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
+
+    plt.title(f"User Interaction Graph for Search Query: {search_query}", fontsize=16)
+    plt.axis("off")
+    plt.show()
+```
+
+```{python}
+search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values())
+
+# Create and plot a subgraph for each search query with modularity labels
+for search_query in search_queries:
+    # Filter edges with the current search query
+    edges_for_query = [
+        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+    ]
+
+    # Create a subgraph for the current search query
+    G_query = G_filtered.edge_subgraph(edges_for_query).copy()
+
+    # Identify communities
+    communities = {}
+    for node in G_query.nodes:
+        community = G_query.nodes[node]["community"]
+        if community not in communities:
+            communities[community] = set()
+        communities[community].add(node)
+
+    # Calculate modularity
+    modularity_value = modularity(G_query, communities.values())
+
+    # Get cluster colors for the nodes
+    cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
+    unique_clusters = list(set(cluster_colors))
+    cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
+    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+
+    # Plot the graph
+    plt.figure(figsize=(12, 10))
+    pos = nx.spring_layout(G_query, k=0.1)
+
+    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
+
+    # Add modularity label
+    plt.text(
+        0.5, 0.95, f"Modularity: {modularity_value:.3f}", fontsize=14, color="black",
+        horizontalalignment='center', transform=plt.gca().transAxes
+    )
+
+    plt.title(f"User Interaction Graph for Search Query: {search_query}", fontsize=16)
+    plt.axis("off")
+    plt.show()
+```
+
+```{python}
+def calculate_internal_density(cluster_nodes, graph):
+    subgraph = graph.subgraph(cluster_nodes)
+    num_edges = subgraph.number_of_edges()
+    num_nodes = subgraph.number_of_nodes()
+    if num_nodes <= 1:
+        return 0  # Avoid division by zero
+    possible_edges = num_nodes * (num_nodes - 1) / 2
+    return num_edges / possible_edges if possible_edges > 0 else 0
+
+# Get unique search queries from the graph
+search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values())
+
+# Create and plot a subgraph for each search query with internal density labels
+for search_query in search_queries:
+    # Filter edges with the current search query
+    edges_for_query = [
+        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+    ]
+
+    # Create a subgraph for the current search query
+    G_query = G_filtered.edge_subgraph(edges_for_query).copy()
+
+    # Identify communities
+    communities = {}
+    for node in G_query.nodes:
+        community = G_query.nodes[node]["community"]
+        if community not in communities:
+            communities[community] = set()
+        communities[community].add(node)
+
+    # Calculate internal density for each community
+    community_densities = {}
+    for community, nodes in communities.items():
+        community_densities[community] = calculate_internal_density(nodes, G_query)
+
+    # Get cluster colors for the nodes
+    cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
+    unique_clusters = list(set(cluster_colors))
+    cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
+    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+
+    # Plot the graph
+    plt.figure(figsize=(12, 10))
+    pos = nx.spring_layout(G_query, k=0.1)
+
+    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
+
+    # Add internal density labels for each cluster
+    for community, density in community_densities.items():
+        cluster_nodes = communities[community]
+        cluster_center = [pos[node] for node in cluster_nodes]
+        center_x = sum([coord[0] for coord in cluster_center]) / len(cluster_center)
+        center_y = sum([coord[1] for coord in cluster_center]) / len(cluster_center)
+        plt.text(
+            center_x, center_y, f"{density:.3f}", fontsize=10, color="black", 
+            horizontalalignment='center', bbox=dict(facecolor="white", alpha=0.5, boxstyle="round,pad=0.3")
+        )
+
+    plt.title(f"User Interaction Graph for Search Query: {search_query} (Internal Density)", fontsize=16)
+    plt.axis("off")
+    plt.show()
+```
+
+```{python}
+search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values())
+modularity_values = []
+
+for search_query in search_queries:
+    # Filter edges with the current search query
+    edges_for_query = [
+        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+    ]
+
+    # Create a subgraph for the current search query
+    G_query = G_filtered.edge_subgraph(edges_for_query).copy()
+
+    # Identify communities
+    communities = {}
+    for node in G_query.nodes:
+        community = G_query.nodes[node]["community"]
+        if community not in communities:
+            communities[community] = set()
+        communities[community].add(node)
+
+    # Calculate modularity
+    modularity_value = modularity(G_query, communities.values())
+    modularity_values.append((search_query, modularity_value))
+
+# Sort the modularity values for better visualization
+modularity_values.sort(key=lambda x: x[1], reverse=True)
+
+# Extract data for plotting
+queries = [item[0] for item in modularity_values]
+modularity_scores = [item[1] for item in modularity_values]
+
+# Create the barplot
+plt.figure(figsize=(12, 8))
+plt.barh(queries, modularity_scores, color='skyblue', edgecolor='black')
+plt.xlabel("Modularity", fontsize=14)
+plt.ylabel("Search Query", fontsize=14)
+plt.title("Modularity Scores for Each Search Query", fontsize=16)
+plt.gca().invert_yaxis()  # Invert y-axis for better readability
+plt.grid(axis='x', linestyle='--', alpha=0.7)
 plt.show()
 ```
 
