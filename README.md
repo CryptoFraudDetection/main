@@ -82,7 +82,12 @@ Main repository for the project.
         sbatch scripts/dummy_sweep_agent.sh nod0ndel/dummy-model-sweep/_________
         ```
         (Replace `_________` with the sweep id)
-5. Run Jupyter notebook on the cluster:
+5. List your jobs:
+    ```bash
+    squeue -u $USER
+    ```
+
+1. Run Jupyter notebook on the cluster:
 
     Run a jupyter server in the current directory with the following command:
 
@@ -90,8 +95,8 @@ Main repository for the project.
     cd ~/code/github.com/CryptoFraudDetection/main
     /cluster/common/jupyter/start-jupyter.sh -g 1 -c 12 -m 16384 -t 1-00:00:00 -d .
     ```
-6. Connect to slave server with command on output
-6. Install packages in jupyterlab:
+2. Connect to slave server with command on output
+3. Install packages in jupyterlab:
     ```bash
     !pip install -r requirements.txt
     ```
