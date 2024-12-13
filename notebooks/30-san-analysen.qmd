@@ -3,13 +3,17 @@ title: Setup
 jupyter: python3
 ---
 
-
-
 ```{python}
 import numpy as np
 import altair as alt
 import pandas as pd
 import matplotlib.pyplot as plt
+import networkx as nx
+import os
+import random
+from tqdm.notebook import tqdm
+from collections import Counter
+from community import community_louvain
 
 alt.themes.enable("dark")
 ```
@@ -28,11 +32,83 @@ Glimpse of the data:
 df.sample(5, random_state=42)
 ```
 
+```{python}
+#describe df
+df.dtypes
+```
+
+These are the columns in the data. Our Network will be an OneMode Network with the nodes being the `author` and the directed edges being the comments (depth >=0).
+
+```{python}
+#na in columns of posts (depth = -1)
+df[df["depth"] == -1].isna().sum()
+```
+
+All NA's in parent_id are there, becuase we filtered for posts and posts don't have a parent_id.
+
+```{python}
+#na in columns of posts (depth >= 0)
+print("na in columns of posts (depth >= 0)")
+display( df[df["depth"] >= 0].isna().sum())
+print('len of comments with depth >= 0')
+display(len(df[df["depth"] >= 0]))
+```
+
+All NA's are in columns which we dont need. Thats why we will delete these columns.
+
+```{python}
+#delete columns edited, title, url, num_comments, subreddit
+df.drop(columns=["edited", "title", "url", "num_comments"], inplace=True)
+```
+
+These columns get deleted: "edited", "title", "url", "num_comments", because we dont need them. 
+
 Which coin appears how often in the data?
 
 ```{python}
 df["search_query"].value_counts()
 ```
+
+```{python}
+id_to_author = dict(zip(df["id"], df["author"]))
+
+df["parent_user"] = df["parent_id"].map(id_to_author)
+df.head()
+```
+
+Here we added a new column, parent_user, which is the author of the parent_id. This is important for the network, because we want to know who commented on who.
+
+```{python}
+depths = range(-1, 10)  # Tiefen von -1 bis 9
+scores_by_depth = [df[df["depth"] == depth]["score"].dropna() for depth in depths]
+
+means_by_depth = [scores.mean() for scores in scores_by_depth]
+
+# Erstelle die Boxplots
+plt.figure(figsize=(12, 8))
+plt.boxplot(scores_by_depth, vert=False, patch_artist=True,
+            labels=[f"Depth {depth}" for depth in depths],
+            boxprops=dict(facecolor='lightblue', color='blue'),
+            medianprops=dict(color='red', linewidth=1.5),
+            flierprops=dict(marker='o', color='orange', markersize=5, alpha=0.5)
+            )
+
+# Zeichne vertikale Linien für die Mittelwerte ein
+for i, mean in enumerate(means_by_depth):
+    plt.axvline(x=mean, ymin=(i+0.25) / len(depths), ymax=(i+0.75) / len(depths),
+                color='green', linewidth=1.5, label='Mean' if i == 0 else "")
+
+# Plot-Details
+plt.title('Boxplot of Scores by Depth (with Mean)', fontsize=14)
+plt.xlabel('Score (Log scaled)', fontsize=12)
+plt.ylabel('Depth', fontsize=12)
+plt.xscale('log')
+plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.legend()
+plt.show()
+```
+
+In this plot its clearly visible, that deeper nested comments usually have a lower score. Posts have extreme outliers, which is visible in the logaritmic X-axis. The Distribution of the score is right-skewed because the mean is higher than the median.
 
 Overview of comments (answers to other people) per coin and subreddit:
 
@@ -458,6 +534,158 @@ c
 ```
 
 The plot is cut off at 2020 because there are not many posts or comments before that time (in relation to the rest of the data). Some cions have more data at the end of the timescale because we used google results to get the post URLs and google had probably some bais towards newer posts.
+
+```{python}
+filtered_df = df[df["depth"] >= 0]
+
+# Initialisiere einen Graphen
+G = nx.DiGraph()  # Direktes Netzwerk, da Kommentare gerichtet sind
+
+# Füge Knoten (autoren) hinzu
+G.add_nodes_from(filtered_df["author"].unique())
+
+# Map von id zu author
+id_to_author = dict(zip(filtered_df["id"], filtered_df["author"]))
+
+# Füge Kanten hinzu
+for _, row in filtered_df.iterrows():
+    parent_id = row["parent_id"]
+    author = row["author"]
+
+    # Überprüfen, ob der parent_id ein bekannter Knoten ist
+    if parent_id in id_to_author:
+        parent_author = id_to_author[parent_id]
+        G.add_edge(parent_author, author)
+
+# Graph speichern oder visualisieren
+output_path = "../data/processed/comments_network.gexf"
+nx.write_gexf(G, output_path)
+print(f"Graph gespeichert unter: {output_path}")
+
+
+```
+
+```{python}
+node_degrees = dict(G.degree())
+
+# Sortiere die Knoten nach ihrer Degree absteigend
+top_nodes = sorted(node_degrees, key=node_degrees.get, reverse=True)[:20]
+
+# Erstelle einen Subgraphen mit den Top 20 Knoten
+top_subgraph = G.subgraph(top_nodes)
+
+# Zeichne den Subgraphen
+plt.figure(figsize=(10, 8))
+pos = nx.spring_layout(top_subgraph, seed=42)  # Schnelles Layout
+nx.draw_networkx_nodes(top_subgraph, pos, node_size=50, alpha=0.7)
+nx.draw_networkx_edges(top_subgraph, pos, alpha=0.3, edge_color="gray")
+
+# Füge Labels (Usernames) hinzu
+labels = {node: node for node in top_subgraph.nodes}
+nx.draw_networkx_labels(top_subgraph, pos, labels, font_size=10, font_color="black", alpha=0.9)
+
+# Titel und Anzeige
+plt.title("Network of Top 20 Users (most Edges)", fontsize=14)
+plt.axis("off")
+plt.show()
+```
+
+
+Here we can see the top 20 Users with the most comments. They are heavily interconnected. 
+TODO: what could we do else in eda?
+
+## Analysis
+
+Are there Users, which answer often to the same users?
+
+```{python}
+
+user_parent_counts = df.groupby(["parent_user", "author"]).size().reset_index(name="count")
+
+top_user_parent = user_parent_counts.sort_values(by="count", ascending=False).head(10)
+
+print("Users with the most interactions with the same parent user:")
+print(top_user_parent)
+```
+
+These are the User with most comments to the same user. There are many Moderator bots in the list and also None.
+
+```{python}
+
+
+filtered_df = df[df["score"] > 0]
+
+# Sort by created (assuming created is a timestamp or sortable column) and take the newest 1000 per search_query
+filtered_df = (
+    filtered_df.sort_values(by="created", ascending=False)
+    .groupby("search_query")
+    .head(500)
+)
+print(len(filtered_df))
+# Group by parent_user and author, summing up the scores
+user_edges = (
+    filtered_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
+)
+
+# Add 1 to the summed scores for the edge weight
+user_edges["weight"] = user_edges["score"] + 1
+
+# Create a directed graph
+G_weighted = nx.DiGraph()
+
+# Add edges with calculated weights
+for _, row in tqdm(user_edges.iterrows()):
+    G_weighted.add_edge(row["parent_user"], row["author"], weight=row["weight"])
+
+plt.figure(figsize=(12, 10))
+pos = nx.spring_layout(G_weighted, seed=42)  # Layout for visual clarity
+
+# Draw nodes and edges
+nx.draw_networkx_nodes(G_weighted, pos, node_size=30, alpha=0.7)
+nx.draw_networkx_edges(G_weighted, pos, width=1.5, alpha=0.5, arrowstyle="->", arrowsize=10)
+
+edge_labels = nx.get_edge_attributes(G_weighted, "weight")
+for (u, v), label in edge_labels.items():
+    x, y = (pos[u][0] + pos[v][0]) / 2, (pos[u][1] + pos[v][1]) / 2  # Midpoint of edge
+    plt.text(x, y, f"{label:.1f}", fontsize=8, color="black", alpha=0.9)
+
+plt.title(
+    "User Interaction Graph with Weighted Edges (Filtered by Score > 0 and Newest 500 per Search Query)",
+    fontsize=16,
+)
+plt.axis("off")
+plt.show()
+```
+
+```{python}
+tqdm_desc = "Louvain Clustering"
+with tqdm(total=1, desc=tqdm_desc) as pbar:
+    partition = community_louvain.best_partition(G_weighted)
+    pbar.update(1)
+
+# Add the partition (cluster) to each node in the graph
+for node, cluster in partition.items():
+    G_weighted.nodes[node]['cluster'] = cluster
+
+# Display the number of clusters
+num_clusters = len(set(partition.values()))
+print(f"Louvain clustering completed: {num_clusters} clusters found.")
+
+# Visualize the clusters
+plt.figure(figsize=(12, 10))
+pos = nx.spring_layout(G_weighted, seed=42)  # Layout for visual clarity
+
+# Draw nodes with color by cluster
+cluster_colors = [partition[node] for node in G_weighted.nodes()]
+nx.draw_networkx_nodes(G_weighted, pos, node_size=700, alpha=0.8, node_color=cluster_colors, cmap=plt.cm.Set3)
+nx.draw_networkx_edges(G_weighted, pos, width=1.5, alpha=0.6, arrowstyle="->", arrowsize=15)
+nx.draw_networkx_labels(G_weighted, pos, font_size=12, font_color="black")
+
+plt.title("Louvain Clustering of User Interaction Graph", fontsize=16)
+plt.axis("off")
+plt.show()
+```
+
 
 # Introduction
 ## Objective
