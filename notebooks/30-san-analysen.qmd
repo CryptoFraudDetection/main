@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import os
 import random
+import re
 from tqdm.notebook import tqdm
 from collections import Counter
 from community import community_louvain
@@ -25,9 +26,13 @@ Read data from parquet file:
 
 ```{python}
 df = pd.read_parquet("../data/processed/reddit.parquet")
+datetime_columns = ['edited', 'created']
+df[datetime_columns] = df[datetime_columns].apply(pd.to_datetime, errors='coerce')
 ```
 
 ## EDA
+
+### Data Overview
 
 Glimpse of the data:
 
@@ -35,57 +40,33 @@ Glimpse of the data:
 df.sample(5, random_state=42)
 ```
 
+Some rows are comments and others are posts: Posts `depth` is set to -1 and they are missing `parent_id` as they initiate a potential discussion. Comments have `parent_id` set to the `id` of the post they are replying to and they are missing `url`, `num_comments`, `title` as they are not posts. Comments can be replies to posts or other comments and therefore a nested structure can be formed.
+
 ```{python}
-#describe df
 df.dtypes
 ```
 
-These are the columns in the data. Our Network will be an OneMode Network with the nodes being the `author` and the directed edges being the comments (depth >=0).
+These are the columns in the data. Our Network will be an OneMode Network with `author` nodes and the directed edges being the comments (`depth>=0`).
+
+#### Crypto Coins Frequency
+
+How many posts are there for each coin?
 
 ```{python}
-#na in columns of posts (depth = -1)
-df[df["depth"] == -1].isna().sum()
+df.query("depth == -1")["search_query"].value_counts()
 ```
 
-All NA's in parent_id are there, becuase we filtered for posts and posts don't have a parent_id.
+Some coins like Teddy Doge and BeerCoin have only a few posts. How many comments are there for each coin?
 
 ```{python}
-#na in columns of posts (depth >= 0)
-print("na in columns of posts (depth >= 0)")
-display( df[df["depth"] >= 0].isna().sum())
-print('len of comments with depth >= 0')
-display(len(df[df["depth"] >= 0]))
+df.query("depth > -1")["search_query"].value_counts()
 ```
 
-All NA's are in columns which we dont need. Thats why we will delete these columns.
+There are multiple hundreds of commeents for each coin or more. As the comments are more important to this analysis and the coins are therefore kept.
 
-```{python}
-#delete columns edited, title, url, num_comments, subreddit
-df.drop(columns=["edited", "title", "url", "num_comments"], inplace=True)
-```
+#### Score Distribution
 
-These columns get deleted: "edited", "title", "url", "num_comments", because we dont need them. 
-
-Which coin appears how often in the data?
-
-```{python}
-df["search_query"].value_counts()
-```
-
-```{python}
-id_to_author = dict(zip(df["id"], df["author"]))
-
-df["parent_user"] = df["parent_id"].map(id_to_author)
-df.head()
-```
-
-Here we added a new column, parent_user, which is the author of the parent_id. This is important for the network, because we want to know who commented on who.
-
-```{python}
-#new column if word 'moon' nad one if word 'pump' in body
-df["moon"] = df["body"].str.contains("moon", case=False)
-df["pump"] = df["body"].str.contains("pump", case=False)
-```
+How are the scores distributed over the posts and comments in respect to there depth (reply to reply to reply etc.)? Note that posts have `depth` set to `-1`.
 
 ```{python}
 depths = range(-1, 10)  # Tiefen von -1 bis 9
@@ -96,7 +77,7 @@ means_by_depth = [scores.mean() for scores in scores_by_depth]
 # Erstelle die Boxplots
 plt.figure(figsize=(12, 8))
 plt.boxplot(scores_by_depth, vert=False, patch_artist=True,
-            labels=[f"Depth {depth}" for depth in depths],
+            tick_labels=[f"Depth {depth}" for depth in depths],
             boxprops=dict(facecolor='lightblue', color='blue'),
             medianprops=dict(color='red', linewidth=1.5),
             flierprops=dict(marker='o', color='orange', markersize=5, alpha=0.5)
@@ -118,6 +99,8 @@ plt.show()
 ```
 
 In this plot its clearly visible, that deeper nested comments usually have a lower score. Posts have extreme outliers, which is visible in the logaritmic X-axis. The Distribution of the score is right-skewed because the mean is higher than the median.
+
+#### Comments and Posts Distributions per Coin and Subreddit
 
 Overview of comments (answers to other people) per coin and subreddit:
 
@@ -220,6 +203,8 @@ c + text
 
 The distribution of posts is similar to the distribution of comments. Teddy Doge got only a few posts. This should not be an issue, as the comments (replies to other people) will be the edges in the graph.
 
+#### Comments Depth Distribution
+
 How deeply nested are the comments (replies to other people)?
 
 ```{python}
@@ -229,7 +214,7 @@ c = (
     alt.Chart(depth_df.reset_index())
     .mark_bar()
     .encode(
-        x=alt.X("depth:O", title="Depth (-1 is the original post)"),
+        x=alt.X("depth:O", title="Depth (-1 is the original post and 0 are top-level comments)"),
         y=alt.Y("count:Q", title="Number of Comments", scale={"domain": [0, 240_000]}),
         tooltip=[
             alt.Tooltip("depth:O", title="Depth"),
@@ -258,6 +243,8 @@ c + text
 ```
 
 There are ~6k posts and most comments (~200k) are direct replies to the post. The distribution decreases ~exponentially and goes to 10 levels deep.
+
+#### Comment/Post Count Distributions per User
 
 How are the number of comments distributed per user?
 
@@ -326,9 +313,9 @@ Most users have only a few comments (~70k have only one comment). There are some
 comments_per_user.sort_values(ascending=False).head(10)
 ```
 
-Some users have a lot of comments but they have `bot`, `auto` or `mod` in their name, which means that they are probably no human. They might be official bots from the subreddit for moderation purposes.
+Some users have a lot of comments but they have `bot`, `auto` or `mod` in their name, they are therefore probably no human. They might be official bots from the subreddit for moderation purposes.
 
-Now lets see how the posts are distributed over the users:
+How the posts are distributed over the users:
 
 ```{python}
 posts_per_user = df.query("depth == -1").groupby("author").size()
@@ -386,15 +373,17 @@ c = (
 c
 ```
 
-The posts are distributed unevenly as well. ~3.6k users have only one post. Let's have a look at the top users (for posts):
+The posts are distributed unevenly as well. ~3.6k users have only one post. How extreme are the top users?
 
 ```{python}
 posts_per_user.sort_values(ascending=False).head(10)
 ```
 
-Some users overlap with the top commenters. Examples: kirtash93, goldyluckinblokchain
+Some users overlap with the top commenters. Examples: `kirtash93`, `goldyluckinblokchain`
 
-Let's have a look at the comment distribution over time per coin:
+#### Comment/Post Distributions over Time
+
+How are the comments and posts distributed over time?
 
 ```{python}
 posts_per_coin_per_date = df.copy()
@@ -404,10 +393,9 @@ posts_per_coin_per_date["created"] = (
     .dt.to_timestamp()
 )
 
-# Filter for comments with depth 0 to 9
 posts_per_coin_per_date = posts_per_coin_per_date.query(
     "created >= '2020-01-01'"
-).query("depth >= 0 and depth <= 9")
+).query("depth >= 0")
 
 posts_per_coin_per_date = (
     posts_per_coin_per_date.groupby(["search_query", "created"])["id"]
@@ -466,8 +454,6 @@ c = (
 
 c
 ```
-
-Let's have a look at the comment distribution over time per coin:
 
 ```{python}
 posts_per_coin_per_date = df.copy()
@@ -542,22 +528,80 @@ c = (
 c
 ```
 
-The plot is cut off at 2020 because there are not many posts or comments before that time (in relation to the rest of the data). Some cions have more data at the end of the timescale because we used google results to get the post URLs and google had probably some bais towards newer posts.
+The plots are cut off at 2020 because there are not many posts or comments before that time (in relation to the rest of the data). Some coins have more data at the end of the timescale because we used google results to get the post URLs and google had probably some bais towards newer posts.
+
+### NA Values
+
+#### Posts
+
+How many posts are there?
 
 ```{python}
-filtered_df = df[df["depth"] >= 0]
+print('Number of posts:', len(df.query("depth == -1")))
+```
 
-# Initialisiere einen Graphen
-G = nx.DiGraph()  # Direktes Netzwerk, da Kommentare gerichtet sind
+`parent_id` is expeted to be NA for all posts. Columns with missing values for posts:
 
-# Füge Knoten (autoren) hinzu
-G.add_nodes_from(filtered_df["author"].unique())
+```{python}
+df.query("depth == -1").isna().sum()[lambda x: x > 0]
+```
 
-# Map von id zu author
-id_to_author = dict(zip(filtered_df["id"], filtered_df["author"]))
+Some posts have been edited but this is ignored in this analysis.
+
+#### Comments
+
+How many comments are there?
+
+```{python}
+print('Number of comments:', len(df[df["depth"] >= 0]))
+```
+
+`title`, `url` and `num_comments` are not used for comments and are expected to be NA. Which columns do have missing values for comments?
+
+```{python}
+df.query("depth >= 0").isna().sum()[lambda x: x > 0]
+```
+
+`edited` is ignored for comments as well.
+
+Posts are not of primary interest for this analysis and therefore unnecessary columns are dropped (even though they are not always NA for posts):
+
+```{python}
+columns = ["edited", "title", "url", "num_comments"]
+df.drop(columns=columns, inplace=True)
+print("Dropped columns:")
+print(columns)
+print("Columns remaining:")
+print(df.columns.to_list())
+```
+
+## User Interaction Network
+
+In this analysis the interactions between users is analyzed and therefore a column `paprent_user` is created with the `author` of the post/comment the user is replying to in this comment. This enables the creation of a network with users as nodes and directed edges between the users being the comments. The first network might have multiple edges between the same nodes if the users have replied to each other multiple times. A second network is created with only one edge between the same nodes, the edge weight being the number of comments between the two users. Edges get critical word hit counts as edge attributes.
+
+```{python}
+df = df.merge(
+    df[["id", "author"]].rename(columns={"id": "parent_id", "author": "parent_user"}),
+    on="parent_id",
+    how="left"
+)
+
+patterns = {"moon": r"moon", "pump": r"pump"}
+for col, pattern in patterns.items():
+    df[col] = df["body"].str.contains(pattern, flags=re.IGNORECASE, na=False)
+```
+
+```{python}
+comments_df = df.query("depth >= 0")
+
+
+G = nx.DiGraph()
+G.add_nodes_from(comments_df["author"].unique())
+
+id_to_author = dict(zip(comments_df["id"], comments_df["author"]))
 
 # Füge Kanten hinzu
-for _, row in filtered_df.iterrows():
+for _, row in comments_df.iterrows():
     parent_id = row["parent_id"]
     author = row["author"]
 
@@ -570,8 +614,6 @@ for _, row in filtered_df.iterrows():
 output_path = "../data/processed/comments_network.gexf"
 nx.write_gexf(G, output_path)
 print(f"Graph gespeichert unter: {output_path}")
-
-
 ```
 
 ```{python}
@@ -599,8 +641,8 @@ plt.axis("off")
 plt.show()
 ```
 
-
 Here we can see the top 20 Users with the most comments. They are heavily interconnected. 
+
 TODO: what could we do else in eda?
 
 ## Analysis
@@ -608,7 +650,6 @@ TODO: what could we do else in eda?
 Are there Users, which answer often to the same users?
 
 ```{python}
-
 user_parent_counts = df.groupby(["parent_user", "author"]).size().reset_index(name="count")
 
 top_user_parent = user_parent_counts.sort_values(by="count", ascending=False).head(10)
@@ -620,21 +661,19 @@ print(top_user_parent)
 These are the User with most comments to the same user. There are many Moderator bots in the list and also None.
 
 ```{python}
-
-
-filtered_df = df[df["score"] > 0]
+comments_df = df[df["score"] > 0]
 
 # Sort by created (assuming created is a timestamp or sortable column) and take the newest 1000 per search_query
-filtered_df = (
-    filtered_df.sort_values(by="created", ascending=False)
+comments_df = (
+    comments_df.sort_values(by="created", ascending=False)
     .groupby("search_query")
     .head(500)
 )
 
-print(len(filtered_df))
+print(len(comments_df))
 # Group by parent_user and author, summing up the scores
 user_edges = (
-    filtered_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
+    comments_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
 )
 
 
@@ -646,7 +685,7 @@ user_edges["weight"] = user_edges["score"] + 1
 G_weighted = nx.DiGraph()
 
 # Add edges with calculated weights and search_query as an edge attribute
-for _, row in tqdm(filtered_df.iterrows(), desc="Building Graph"):
+for _, row in tqdm(comments_df.iterrows(), desc="Building Graph"):
     G_weighted.add_edge(
         row["parent_user"], 
         row["author"], 
@@ -658,7 +697,6 @@ for _, row in tqdm(filtered_df.iterrows(), desc="Building Graph"):
 ```
 
 ```{python}
-
 plt.figure(figsize=(12, 10))
 pos = nx.spring_layout(G_weighted, seed=42, k=60, scale=3.0)
 
@@ -997,175 +1035,4 @@ plt.gca().invert_yaxis()  # Invert y-axis for better readability
 plt.grid(axis='x', linestyle='--', alpha=0.7)
 plt.show()
 ```
-
-
-# Introduction
-## Objective
-### State the overarching goal of the project
-### Define specific questions or hypotheses to be explored through SNA
-
-## Scope
-### Define the boundaries of the analysis (e.g., time frame, data granularity)
-
-## Relevance to SNA
-### Discuss why this topic is suitable for SNA
-### Highlight potential insights or applications of the findings
-
-## Data Sources
-### List sources of data and their formats (e.g., API, CSV, JSON)
-### Mention any limitations or conditions tied to the data
-
-
-# Data Collection
-## Objective
-### Summarize the goal of collecting this data
-
-## Selection Criteria
-### Describe the factors considered while selecting datasets (e.g., attributes, volume, quality)
-
-## Methods Used
-### API usage or web scraping
-#### Describe API endpoints or scraping scripts
-#### Tools used (e.g., `requests`, `BeautifulSoup`)
-### Pre-existing datasets
-#### Mention the sources and any preprocessing required
-
-## Challenges and Solutions
-### Examples of issues encountered (e.g., data access restrictions, API rate limits)
-### Workarounds or adjustments made
-
-## Data Validation
-### Describe checks performed to ensure completeness and accuracy
-### Strategies for handling missing or inconsistent data
-
-## Raw Data Summary
-### Present a summary table (e.g., number of records, key fields)
-### Provide a brief description of important fields
-
-# Exploratory Data Analysis (EDA)
-## Initial Insights
-### Describe first impressions of the dataset
-
-## Data Cleaning
-### Steps taken to clean data (e.g., handling duplicates, standardizing formats)
-
-## Visual Exploration
-### Histograms, scatter plots, and other visualizations for understanding distributions
-
-## Statistical Analysis
-### Summarize key statistics (mean, median, mode, variance)
-
-## Missing Data Analysis
-### Identify missing values and their impact
-### Strategies for imputation or exclusion
-
-## Outliers
-### Discuss detection methods (e.g., box plots, z-scores)
-### How these were handled in the dataset
-
-## Tools and Automation
-### Summary of libraries/tools used for EDA (e.g., `pandas-profiling`, `Sweetviz`)
-### Include generated reports if applicable
-
-# Data Modeling
-## Network Design
-### Define the network type (e.g., directed, undirected, weighted)
-### Specify attributes for nodes and edges
-
-## Preprocessing
-### Steps for transforming raw data into a network-ready format
-
-## Graph Construction
-### Description of how the graph was built (e.g., adjacency matrix, edge list)
-
-## Graph Characteristics
-### Number of nodes and edges
-### Basic statistics (density, clustering coefficient)
-
-## Visualization
-### Initial network plots (e.g., using `NetworkX`, `Matplotlib`, Gephi)
-### Brief interpretation of the visualizations
-
-# Social Network Analysis
-## Overview of Analyses
-### List the types of analyses to be performed
-
-## Node-Level Metrics
-### Calculate and interpret Degree Centrality
-### Calculate and interpret Closeness Centrality
-### Calculate and interpret Betweenness Centrality
-### Calculate and interpret Eigenvector Centrality
-
-## Edge-Level Analysis
-### Identify and interpret important connections
-
-## Community Detection
-### Discuss methods used (e.g., Louvain, Girvan-Newman)
-### Visualize and interpret communities
-
-## Temporal or Dynamic Analysis
-### If applicable, analyze changes in the network over time
-
-## Sub-Networks
-### Identify key sub-networks
-### Discuss their relevance and characteristics
-
-## Comparisons
-### Compare multiple networks or perspectives within the same dataset
-
-## Visualization and Interpretation
-### Highlight key findings with clear visual aids
-### Relate findings to the original research question
-
-# Results and Interpretation
-## Key Findings
-### Summarize the main results from the analyses
-
-## Insights
-### Discuss how these results address the research questions or hypotheses
-
-## Real-World Implications
-### Explain the significance of these findings in a broader context
-
-## Evaluation
-### Assess the quality of the data and analyses
-
-## Limitations
-### Acknowledge shortcomings of the data or methods
-
-# Outlook
-## Future Work
-### Suggest extensions or improvements to the project
-
-## Unanswered Questions
-### Highlight potential areas of exploration
-
-## Data Enhancements
-### Discuss additional data sources or attributes that could enrich the analysis
-
-# Lessons Learned
-## Project Highlights
-### Reflect on successes and innovative solutions
-
-## Challenges
-### Discuss difficulties faced and lessons drawn
-
-## Recommendations
-### Propose best practices for similar projects in the future
-
-# Appendices
-## Code and Scripts
-### Include all relevant scripts used for the project
-
-## Raw Data Samples
-### Attach examples of the raw dataset
-
-## Graph Outputs
-### Save and display network outputs (e.g., CSVs, Gephi files)
-
-## Additional Visualizations
-### Supplementary charts or tables
-
-## References
-### Cite all external sources and tools used
 
