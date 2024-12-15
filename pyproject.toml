@@ -30,7 +30,7 @@ dependencies = [
     "wandb==0.18.5",
     "python-dotenv==1.0.1",
     "praw==7.8.1",
-    "tqdm==4.67.0",
+    "tqdm==4.67.1",
     "altair==5.4.1",
     "matplotlib==3.9.2",
     "seaborn==0.13.2",
@@ -38,6 +38,9 @@ dependencies = [
     "beautifulsoup4==4.12.3",
     "openai==1.55.2",
     "transformers===4.46.3 ",
+    "openai==1.55.2",
+    "jupyterlab==4.3.3",
+    "notebook==7.3.1",
 ]
 
 [project.urls]
