@@ -4,6 +4,7 @@ jupyter: python3
 ---
 
 ```{python}
+from typing import Any
 import numpy as np
 import altair as alt
 import pandas as pd
@@ -17,7 +18,9 @@ from collections import Counter
 from community import community_louvain
 from networkx.algorithms.community import label_propagation_communities
 from networkx.algorithms.community.quality import modularity
-
+import heapq
+from IPython.display import Image, display
+import pygraphviz as pgv
 
 alt.themes.enable("dark")
 ```
@@ -26,8 +29,8 @@ Read data from parquet file:
 
 ```{python}
 df = pd.read_parquet("../data/processed/reddit.parquet")
-datetime_columns = ['edited', 'created']
-df[datetime_columns] = df[datetime_columns].apply(pd.to_datetime, errors='coerce')
+datetime_columns = ["edited", "created"]
+df[datetime_columns] = df[datetime_columns].apply(pd.to_datetime, errors="coerce")
 ```
 
 ## EDA
@@ -76,24 +79,33 @@ means_by_depth = [scores.mean() for scores in scores_by_depth]
 
 # Erstelle die Boxplots
 plt.figure(figsize=(12, 8))
-plt.boxplot(scores_by_depth, vert=False, patch_artist=True,
-            tick_labels=[f"Depth {depth}" for depth in depths],
-            boxprops=dict(facecolor='lightblue', color='blue'),
-            medianprops=dict(color='red', linewidth=1.5),
-            flierprops=dict(marker='o', color='orange', markersize=5, alpha=0.5)
-            )
+plt.boxplot(
+    scores_by_depth,
+    vert=False,
+    patch_artist=True,
+    tick_labels=[f"Depth {depth}" for depth in depths],
+    boxprops=dict(facecolor="lightblue", color="blue"),
+    medianprops=dict(color="red", linewidth=1.5),
+    flierprops=dict(marker="o", color="orange", markersize=5, alpha=0.5),
+)
 
 # Zeichne vertikale Linien für die Mittelwerte ein
 for i, mean in enumerate(means_by_depth):
-    plt.axvline(x=mean, ymin=(i+0.25) / len(depths), ymax=(i+0.75) / len(depths),
-                color='green', linewidth=1.5, label='Mean' if i == 0 else "")
+    plt.axvline(
+        x=mean,
+        ymin=(i + 0.25) / len(depths),
+        ymax=(i + 0.75) / len(depths),
+        color="green",
+        linewidth=1.5,
+        label="Mean" if i == 0 else "",
+    )
 
 # Plot-Details
-plt.title('Boxplot of Scores by Depth (with Mean)', fontsize=14)
-plt.xlabel('Score (Log scaled)', fontsize=12)
-plt.ylabel('Depth', fontsize=12)
-plt.xscale('log')
-plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.title("Boxplot of Scores by Depth (with Mean)", fontsize=14)
+plt.xlabel("Score (Log scaled)", fontsize=12)
+plt.ylabel("Depth", fontsize=12)
+plt.xscale("log")
+plt.grid(axis="x", linestyle="--", alpha=0.7)
 plt.legend()
 plt.show()
 ```
@@ -214,7 +226,10 @@ c = (
     alt.Chart(depth_df.reset_index())
     .mark_bar()
     .encode(
-        x=alt.X("depth:O", title="Depth (-1 is the original post and 0 are top-level comments)"),
+        x=alt.X(
+            "depth:O",
+            title="Depth (-1 is the original post and 0 are top-level comments)",
+        ),
         y=alt.Y("count:Q", title="Number of Comments", scale={"domain": [0, 240_000]}),
         tooltip=[
             alt.Tooltip("depth:O", title="Depth"),
@@ -406,7 +421,9 @@ posts_per_coin_per_date = (
 
 posts_per_coin_per_date["number_of_comments_rel"] = posts_per_coin_per_date[
     "number_of_comments"
-] / posts_per_coin_per_date.groupby("search_query")["number_of_comments"].transform("sum")
+] / posts_per_coin_per_date.groupby("search_query")["number_of_comments"].transform(
+    "sum"
+)
 
 step = 40
 overlap = 1
@@ -537,7 +554,7 @@ The plots are cut off at 2020 because there are not many posts or comments befor
 How many posts are there?
 
 ```{python}
-print('Number of posts:', len(df.query("depth == -1")))
+print("Number of posts:", len(df.query("depth == -1")))
 ```
 
 `parent_id` is expeted to be NA for all posts. Columns with missing values for posts:
@@ -553,7 +570,7 @@ Some posts have been edited but this is ignored in this analysis.
 How many comments are there?
 
 ```{python}
-print('Number of comments:', len(df[df["depth"] >= 0]))
+print("Number of comments:", len(df[df["depth"] >= 0]))
 ```
 
 `title`, `url` and `num_comments` are not used for comments and are expected to be NA. Which columns do have missing values for comments?
@@ -568,80 +585,246 @@ Posts are not of primary interest for this analysis and therefore unnecessary co
 
 ```{python}
 columns = ["edited", "title", "url", "num_comments"]
-df.drop(columns=columns, inplace=True)
+shrinked_df = df.drop(columns=columns)
 print("Dropped columns:")
 print(columns)
 print("Columns remaining:")
-print(df.columns.to_list())
+print(shrinked_df.columns.to_list())
 ```
 
 ## User Interaction Network
 
-In this analysis the interactions between users is analyzed and therefore a column `paprent_user` is created with the `author` of the post/comment the user is replying to in this comment. This enables the creation of a network with users as nodes and directed edges between the users being the comments. The first network might have multiple edges between the same nodes if the users have replied to each other multiple times. A second network is created with only one edge between the same nodes, the edge weight being the number of comments between the two users. Edges get critical word hit counts as edge attributes.
+In this analysis the interactions between users is analyzed and therefore a column `paprent_user` is created with the `author` of the post/comment the user is replying to. This enables the creation of a graph with users as nodes and directed edges being the comments.
+
+### Data Preprocessing
+
+The data is grouped by `author` and `parent_user` so there is only one edge between the same nodes. The edge weights are the number of comments between the two authors. Edges get `sum(score)`, sum of critical word hit counts (example: `moon`) and number of coin occurrences as additional edge attributes.
+
+As some algorithms do not work on directed graphs it might be necessary to convert the graph to an undirected graph later on. The information in which direction the comments went would be lost, but the overall information, which users tend to interact and the word counts will be preserved.
+
+The aggregation is done on the data frame and a glimpse at the data is provided (sorted by some edge attribute):
 
 ```{python}
-df = df.merge(
-    df[["id", "author"]].rename(columns={"id": "parent_id", "author": "parent_user"}),
-    on="parent_id",
-    how="left"
+# Convert coin column to dummy columns
+
+dummies_df = shrinked_df.copy()
+# convert coin names to snake_case
+dummies_df["search_query"] = dummies_df["search_query"].str.replace(r"[^a-zA-Z0-9]", "_", regex=True).str.lower()
+# Convert coin column to dummy columns
+dummies_df = (
+    dummies_df
+    .join(dummies_df.search_query.str.get_dummies())
+    .drop(columns="search_query")
 )
 
+# Add parent user column (author of the comment/post the user is replying to)
+parent_user_df = dummies_df.merge(
+    dummies_df[["id", "author"]].rename(columns={"id": "parent_id", "author": "parent_user"}),
+    on="parent_id",
+    how="left",
+)
+
+# Keyword word hit count
+# TODO: more keywords?
 patterns = {"moon": r"moon", "pump": r"pump"}
+keyword_df = parent_user_df.copy()
 for col, pattern in patterns.items():
-    df[col] = df["body"].str.contains(pattern, flags=re.IGNORECASE, na=False)
+    keyword_df[col] = keyword_df["body"].str.findall(
+        pattern, flags=re.IGNORECASE
+    ).str.len()
+
+# Numeric columns will be aggregated later on for comments and posts
+agg_columns = keyword_df.select_dtypes('number').columns.to_list()
+agg_columns.remove("depth")  # not of interest to aggregated edges
+
+# Filter for comments
+comments_df = keyword_df.query("depth >= 0").copy()
+
+# Group and aggregate comments
+grouped_comments_df = comments_df.groupby(["author", "parent_user"], as_index=False).agg(
+    weight=("score", "size"),
+    mean_score=("score", "mean"),
+    **{col: (col, "sum") for col in agg_columns},
+)
+
+# Display top edges
+cols = {"weight", "score"} | set(patterns.keys())
+for column in cols:
+    print(f"Top edges (sorted by {column}):")
+    display(grouped_comments_df.sort_values(column, ascending=False).head(5))
 ```
 
+Edges between users with unknown user names are high up in the `count` and `weight` scores as they are all grouped together. Their comments are kept for now, as they might give insight, but it is important to note, that probably multiple users where put together into `None`. Edges between users with unknown names will be kept as a self loop edge on the node `None`.
+
+`None` users and users with `mod`, `auto` or `bot` in there names are high in the list of edges sorted by `moon` or `pump` count. This might suggest, that they might not be official mods, because official mods would probably not use those words (this would have to be verified).
+
+The edge data is now aggregated to precalculate node attributes to speed up network analysis. For each node in and out sums of edge attributes are calculated by grouping by `author` or `parent_user` accordingly. The attributes are prefixed with `out_comment` and `in_comment` accordingly. The number of posts (`post_count`), sum of scores of posts (`post_scores`) and selected word counts in posts are aggregated per author as well. A glimpse at the node data is provided:
+
 ```{python}
-comments_df = df.query("depth >= 0")
+def prefix_column(df: pd.DataFrame, prefix: str, exclude_column: str = "author") -> pd.DataFrame:
+    """
+    Prefixes all column names in the DataFrame except one with a given string.
+
+    Args:
+        df: The DataFrame whose columns will be renamed.
+        prefix: The string to add as a prefix to the column names.
+        exclude_column: The name of the column to exclude from renaming.
+
+    Returns:
+        A new DataFrame with renamed columns.
+    """
+    return df.rename(columns={col: f"{prefix}{col}" for col in df.columns if col != exclude_column})
 
 
-G = nx.DiGraph()
-G.add_nodes_from(comments_df["author"].unique())
+# Outgoing edge stats per node
+grouped_out_comments_df = prefix_column(
+    (
+        grouped_comments_df.drop(columns="parent_user")
+        .groupby("author", as_index=False)
+        .sum()
+    ),
+    "out_comment_"
+)
 
-id_to_author = dict(zip(comments_df["id"], comments_df["author"]))
 
-# Füge Kanten hinzu
-for _, row in comments_df.iterrows():
-    parent_id = row["parent_id"]
-    author = row["author"]
+# Incomming edge stats per node
+grouped_in_comments_df = prefix_column(
+    (
+        grouped_comments_df.drop(columns="author")
+        .groupby("parent_user", as_index=False)
+        .sum()
+        .rename(columns={"parent_user": "author"})
+    ),
+    "in_comment_"
+)
 
-    # Überprüfen, ob der parent_id ein bekannter Knoten ist
-    if parent_id in id_to_author:
-        parent_author = id_to_author[parent_id]
-        G.add_edge(parent_author, author)
+# Post stats per node
+grouped_posts_df = prefix_column(
+    (
+        keyword_df.query("depth == -1")
+        .copy()
+        .groupby("author", as_index=False)
+        .agg(
+            count=("score", "size"),
+            mean_score=("score", "mean"),
+            **{col: (col, "sum") for col in agg_columns},
+        )
+    ),
+    "post_"
+)
 
-# Graph speichern oder visualisieren
+# Join the node data frames
+node_df = grouped_posts_df.merge(grouped_out_comments_df, 'outer').merge(grouped_in_comments_df, 'outer').fillna(0)
+
+# Display top nodes
+columns = ["post_count", "post_score"] + [
+    f"{p}_comment_{x}"
+    for x in patterns.keys()
+    for p in ("out", "in")
+]
+for column in columns:
+    print(f"Top nodes (sorted by {column}):")
+    display(node_df.sort_values(column, ascending=False).head(5))
+```
+
+
+The directed graph is created:
+
+```{python}
+def create_graph_from_dataframe(df, name_column="author"):
+    """
+    Create a NetworkX graph with nodes from a pandas DataFrame, where one column
+    is used as the node name and all other columns become node attributes.
+
+    Args:
+        df: The pandas DataFrame containing the data.
+        name_column: The column to use as the node name.
+
+    Returns:
+        A NetworkX graph with nodes and their attributes.
+    """
+    # Initialize a graph
+    G = nx.Graph()
+
+    # Set the graph name to the column containing the network name
+    G.graph["name"] = "Graph based on column: " + name_column
+
+    # Add nodes with attributes
+    G.add_nodes_from(
+        (row[name_column], row.drop(name_column).to_dict()) for _, row in df.iterrows()
+    )
+
+    return G
+
+G = create_graph_from_dataframe(node_df)
+
+
+# Add edges
+for _, row in grouped_comments_df.iterrows():
+    edge_attributes = row[2:].to_dict()
+    G.add_edge(row["author"], row["parent_user"], **edge_attributes)
+
+# Write graph to file
 output_path = "../data/processed/comments_network.gexf"
 nx.write_gexf(G, output_path)
-print(f"Graph gespeichert unter: {output_path}")
+print(f"Graph saved as: {output_path}")
 ```
+
+The top nodes for each edge attribute are visualized to get some insights:
 
 ```{python}
-node_degrees = dict(G.degree())
+def visualize_top_nodes_graphviz(
+    graph: nx.DiGraph, attribute: str, top_n: int = 10, output_file: str = "graph"
+) -> None:
+    """
+    Exports the top N nodes based on a specified node attribute and their directed edges
+    for visualization with Graphviz. Ensures arrows are displayed to indicate edge direction.
 
-# Sortiere die Knoten nach ihrer Degree absteigend
-top_nodes = sorted(node_degrees, key=node_degrees.get, reverse=True)[:20]
+    Args:
+        graph: The NetworkX directed graph.
+        attribute: The node attribute to use for ranking.
+        top_n: The number of top nodes to include.
+        output_file: The base name for saving DOT and PNG files.
+    """
+    # Ensure the attribute exists in the nodes
+    if not all(attribute in graph.nodes[node] for node in graph.nodes):
+        raise ValueError(f"Attribute '{attribute}' not found in all nodes.")
 
-# Erstelle einen Subgraphen mit den Top 20 Knoten
-top_subgraph = G.subgraph(top_nodes)
+    # Find the top N nodes by the specified attribute
+    top_nodes = [node for node, _ in heapq.nlargest(top_n, graph.nodes(data=attribute), key=lambda x: x[1])]
 
-# Zeichne den Subgraphen
-plt.figure(figsize=(10, 8))
-pos = nx.spring_layout(top_subgraph, seed=42)  # Schnelles Layout
-nx.draw_networkx_nodes(top_subgraph, pos, node_size=50, alpha=0.7)
-nx.draw_networkx_edges(top_subgraph, pos, alpha=0.3, edge_color="gray")
+    # Create a subgraph with only the top nodes (includes isolated nodes)
+    subgraph = graph.subgraph(top_nodes)
 
-# Füge Labels (Usernames) hinzu
-labels = {node: node for node in top_subgraph.nodes}
-nx.draw_networkx_labels(top_subgraph, pos, labels, font_size=10, font_color="black", alpha=0.9)
+    # Convert to PyGraphviz AGraph and force directed rendering
+    A = nx.nx_agraph.to_agraph(subgraph)
+    A.graph_attr["rankdir"] = "TB"  # Layout top-to-bottom
+    A.graph_attr["label"] = f"Top {top_n} Nodes by {attribute.capitalize()}"
+    A.graph_attr["labelloc"] = "top"
+    A.graph_attr["fontsize"] = 20
 
-# Titel und Anzeige
-plt.title("Network of Top 20 Users (most Edges)", fontsize=14)
-plt.axis("off")
-plt.show()
+    # Ensure directed graph and arrowheads
+    A.graph_attr["directed"] = "true"
+    for edge in A.edges():
+        edge.attr["arrowhead"] = "normal"  # Explicitly set arrowhead for edges
+
+    # Export DOT file and render as PNG
+    dot_file = f"{output_file}.dot"
+    png_file = f"{output_file}.png"
+    A.write(dot_file)
+    A.layout(prog="dot")  # Use Graphviz's dot layout
+    A.draw(png_file)
+
+    # Display the PNG in the notebook
+    display(Image(filename=png_file))
+
+node_attributes = node_df.columns.to_list()
+node_attributes.remove("author")
+for node_attr in node_attributes:
+    visualize_top_nodes_graphviz(G, node_attr)
 ```
 
-Here we can see the top 20 Users with the most comments. They are heavily interconnected. 
+Here we can see the top 10 nodes with the most comments. They are heavily interconnected. 
 
 TODO: what could we do else in eda?
 
@@ -650,7 +833,9 @@ TODO: what could we do else in eda?
 Are there Users, which answer often to the same users?
 
 ```{python}
-user_parent_counts = df.groupby(["parent_user", "author"]).size().reset_index(name="count")
+user_parent_counts = (
+    df.groupby(["parent_user", "author"]).size().reset_index(name="count")
+)
 
 top_user_parent = user_parent_counts.sort_values(by="count", ascending=False).head(10)
 
@@ -672,10 +857,7 @@ comments_df = (
 
 print(len(comments_df))
 # Group by parent_user and author, summing up the scores
-user_edges = (
-    comments_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
-)
-
+user_edges = comments_df.groupby(["parent_user", "author"])["score"].sum().reset_index()
 
 
 # Add 1 to the summed scores for the edge weight
@@ -687,12 +869,12 @@ G_weighted = nx.DiGraph()
 # Add edges with calculated weights and search_query as an edge attribute
 for _, row in tqdm(comments_df.iterrows(), desc="Building Graph"):
     G_weighted.add_edge(
-        row["parent_user"], 
-        row["author"], 
-        weight=row["score"] + 1, 
+        row["parent_user"],
+        row["author"],
+        weight=row["score"] + 1,
         search_query=row["search_query"],
         moon=row["moon"],  # Add 'moon' as an edge attribute
-        pump=row["pump"]   # Add 'pump' as an edge attribute
+        pump=row["pump"],  # Add 'pump' as an edge attribute
     )
 ```
 
@@ -702,7 +884,9 @@ pos = nx.spring_layout(G_weighted, seed=42, k=60, scale=3.0)
 
 # Draw nodes and edges
 nx.draw_networkx_nodes(G_weighted, pos, node_size=1, alpha=0.7)
-nx.draw_networkx_edges(G_weighted, pos, width=1, alpha=0.5, arrowstyle="->", arrowsize=8)
+nx.draw_networkx_edges(
+    G_weighted, pos, width=1, alpha=0.5, arrowstyle="->", arrowsize=8
+)
 
 edge_labels = nx.get_edge_attributes(G_weighted, "weight")
 for (u, v), label in edge_labels.items():
@@ -727,9 +911,11 @@ with tqdm(total=1, desc=tqdm_desc) as pbar:
     pbar.update(1)
 
 # Assign communities to nodes
-node_community_mapping = {node: i for i, community in enumerate(communities) for node in community}
+node_community_mapping = {
+    node: i for i, community in enumerate(communities) for node in community
+}
 for node, community in node_community_mapping.items():
-    G_undirected.nodes[node]['community'] = community
+    G_undirected.nodes[node]["community"] = community
 
 # Display the number of clusters
 num_clusters = len(communities)
@@ -737,9 +923,9 @@ print(f"Label Propagation Clustering completed: {num_clusters} clusters found.")
 ```
 
 ```{python}
-#print size of clusters
+# print size of clusters
 cluster_sizes = Counter(node_community_mapping.values())
-#sort
+# sort
 cluster_sizes = dict(sorted(cluster_sizes.items(), key=lambda x: x[1], reverse=True))
 print("Size of clusters:")
 print(cluster_sizes)
@@ -755,13 +941,24 @@ G_non_self = G_undirected.edge_subgraph(non_self_edges).copy()
 
 # Set up subplots
 fig, axes = plt.subplots(1, 2, figsize=(20, 10))
-fig.suptitle("Self-references vs Non-self-references in User Interaction Graph (with Clusters)", fontsize=18)
+fig.suptitle(
+    "Self-references vs Non-self-references in User Interaction Graph (with Clusters)",
+    fontsize=18,
+)
 
 # Plot self-references with clusters
 ax = axes[0]
 pos_self = nx.spring_layout(G_self, seed=42, k=0.1)
-community_colors_self = [G_self.nodes[node]['community'] for node in G_self.nodes()]
-nx.draw_networkx_nodes(G_self, pos_self, node_size=50, alpha=0.8, ax=ax, node_color=community_colors_self, cmap=plt.cm.Set3)
+community_colors_self = [G_self.nodes[node]["community"] for node in G_self.nodes()]
+nx.draw_networkx_nodes(
+    G_self,
+    pos_self,
+    node_size=50,
+    alpha=0.8,
+    ax=ax,
+    node_color=community_colors_self,
+    cmap=plt.cm.Set3,
+)
 nx.draw_networkx_edges(G_self, pos_self, width=1.5, alpha=0.6, ax=ax)
 ax.set_title("Self-references (Edges on Themselves)", fontsize=16)
 ax.axis("off")
@@ -769,8 +966,18 @@ ax.axis("off")
 # Plot non-self-references with clusters
 ax = axes[1]
 pos_non_self = nx.spring_layout(G_non_self, seed=42)
-community_colors_non_self = [G_non_self.nodes[node]['community'] for node in G_non_self.nodes()]
-nx.draw_networkx_nodes(G_non_self, pos_non_self, node_size=50, alpha=0.8, ax=ax, node_color=community_colors_non_self, cmap=plt.cm.Set3)
+community_colors_non_self = [
+    G_non_self.nodes[node]["community"] for node in G_non_self.nodes()
+]
+nx.draw_networkx_nodes(
+    G_non_self,
+    pos_non_self,
+    node_size=50,
+    alpha=0.8,
+    ax=ax,
+    node_color=community_colors_non_self,
+    cmap=plt.cm.Set3,
+)
 nx.draw_networkx_edges(G_non_self, pos_non_self, width=1.5, alpha=0.6, ax=ax)
 ax.set_title("Non-self-references (Edges with No Self-references)", fontsize=16)
 ax.axis("off")
@@ -779,13 +986,17 @@ plt.show()
 ```
 
 ```{python}
-cluster_sizes = Counter(nx.get_node_attributes(G_undirected, 'community').values())
+cluster_sizes = Counter(nx.get_node_attributes(G_undirected, "community").values())
 
 # Filter for clusters greater than size 2
 valid_clusters = {cluster for cluster, size in cluster_sizes.items() if size > 10}
 
 # Filter nodes belonging to valid clusters
-nodes_in_valid_clusters = [node for node in G_undirected.nodes if G_undirected.nodes[node]['community'] in valid_clusters]
+nodes_in_valid_clusters = [
+    node
+    for node in G_undirected.nodes
+    if G_undirected.nodes[node]["community"] in valid_clusters
+]
 
 # Create a subgraph with only the valid clusters
 G_filtered = G_undirected.subgraph(nodes_in_valid_clusters).copy()
@@ -795,8 +1006,15 @@ plt.figure(figsize=(12, 10))
 pos = nx.spring_layout(G_filtered, k=0.1, seed=42)
 
 # Draw nodes and edges
-community_colors = [G_filtered.nodes[node]['community'] for node in G_filtered.nodes()]
-nx.draw_networkx_nodes(G_filtered, pos, node_size=10, alpha=0.8, node_color=community_colors, cmap=plt.cm.Set3)
+community_colors = [G_filtered.nodes[node]["community"] for node in G_filtered.nodes()]
+nx.draw_networkx_nodes(
+    G_filtered,
+    pos,
+    node_size=10,
+    alpha=0.8,
+    node_color=community_colors,
+    cmap=plt.cm.Set3,
+)
 nx.draw_networkx_edges(G_filtered, pos, width=1.5, alpha=0.6)
 
 plt.title("Filtered User Interaction Graph (Clusters with Size > 2)", fontsize=16)
@@ -816,7 +1034,9 @@ for u, v, data in G_undirected.edges(data=True):
 # Assign the most common 'search_query' to each node
 for node, queries in node_search_queries.items():
     most_common_query = Counter(queries).most_common(1)
-    G_undirected.nodes[node]["search_query"] = most_common_query[0][0] if most_common_query else "Unknown"
+    G_undirected.nodes[node]["search_query"] = (
+        most_common_query[0][0] if most_common_query else "Unknown"
+    )
 
 # Identify clusters with size > 10
 cluster_sizes = Counter(nx.get_node_attributes(G_undirected, "community").values())
@@ -824,7 +1044,8 @@ valid_clusters = {cluster for cluster, size in cluster_sizes.items() if size > 1
 
 # Filter nodes belonging to valid clusters
 nodes_in_valid_clusters = [
-    node for node in G_undirected.nodes 
+    node
+    for node in G_undirected.nodes
     if G_undirected.nodes[node]["community"] in valid_clusters
 ]
 
@@ -841,10 +1062,15 @@ color_values = [color_map[search_query_colors[node]] for node in G_filtered.node
 plt.figure(figsize=(12, 10))
 pos = nx.spring_layout(G_filtered, k=0.1)
 
-nx.draw_networkx_nodes(G_filtered, pos, node_size=10, alpha=0.8, node_color=color_values, cmap=plt.cm.tab20)
+nx.draw_networkx_nodes(
+    G_filtered, pos, node_size=10, alpha=0.8, node_color=color_values, cmap=plt.cm.tab20
+)
 nx.draw_networkx_edges(G_filtered, pos, width=1.5, alpha=0.6)
 
-plt.title("Filtered User Interaction Graph (Clusters with Size > 10, Colored by Search Query)", fontsize=16)
+plt.title(
+    "Filtered User Interaction Graph (Clusters with Size > 10, Colored by Search Query)",
+    fontsize=16,
+)
 plt.axis("off")
 plt.show()
 ```
@@ -856,7 +1082,9 @@ search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values()
 for search_query in search_queries:
     # Filter edges with the current search query
     edges_for_query = [
-        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+        (u, v)
+        for u, v, data in G_filtered.edges(data=True)
+        if data["search_query"] == search_query
     ]
 
     # Create a subgraph for the current search query
@@ -866,13 +1094,17 @@ for search_query in search_queries:
     cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
     unique_clusters = list(set(cluster_colors))
     cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
-    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+    node_colors = [
+        cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()
+    ]
 
     # Plot the graph
     plt.figure(figsize=(12, 10))
     pos = nx.spring_layout(G_query, k=0.1)
 
-    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_nodes(
+        G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20
+    )
     nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
 
     plt.title(f"User Interaction Graph for Search Query: {search_query}", fontsize=16)
@@ -887,7 +1119,9 @@ search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values()
 for search_query in search_queries:
     # Filter edges with the current search query
     edges_for_query = [
-        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+        (u, v)
+        for u, v, data in G_filtered.edges(data=True)
+        if data["search_query"] == search_query
     ]
 
     # Create a subgraph for the current search query
@@ -908,19 +1142,28 @@ for search_query in search_queries:
     cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
     unique_clusters = list(set(cluster_colors))
     cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
-    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+    node_colors = [
+        cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()
+    ]
 
     # Plot the graph
     plt.figure(figsize=(12, 10))
     pos = nx.spring_layout(G_query, k=0.1)
 
-    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_nodes(
+        G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20
+    )
     nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
 
     # Add modularity label
     plt.text(
-        0.5, 0.95, f"Modularity: {modularity_value:.3f}", fontsize=14, color="black",
-        horizontalalignment='center', transform=plt.gca().transAxes
+        0.5,
+        0.95,
+        f"Modularity: {modularity_value:.3f}",
+        fontsize=14,
+        color="black",
+        horizontalalignment="center",
+        transform=plt.gca().transAxes,
     )
 
     plt.title(f"User Interaction Graph for Search Query: {search_query}", fontsize=16)
@@ -938,6 +1181,7 @@ def calculate_internal_density(cluster_nodes, graph):
     possible_edges = num_nodes * (num_nodes - 1) / 2
     return num_edges / possible_edges if possible_edges > 0 else 0
 
+
 # Get unique search queries from the graph
 search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values())
 
@@ -945,7 +1189,9 @@ search_queries = set(nx.get_edge_attributes(G_filtered, "search_query").values()
 for search_query in search_queries:
     # Filter edges with the current search query
     edges_for_query = [
-        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+        (u, v)
+        for u, v, data in G_filtered.edges(data=True)
+        if data["search_query"] == search_query
     ]
 
     # Create a subgraph for the current search query
@@ -968,13 +1214,17 @@ for search_query in search_queries:
     cluster_colors = [G_query.nodes[node]["community"] for node in G_query.nodes()]
     unique_clusters = list(set(cluster_colors))
     cluster_color_map = {cluster: idx for idx, cluster in enumerate(unique_clusters)}
-    node_colors = [cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()]
+    node_colors = [
+        cluster_color_map[G_query.nodes[node]["community"]] for node in G_query.nodes()
+    ]
 
     # Plot the graph
     plt.figure(figsize=(12, 10))
     pos = nx.spring_layout(G_query, k=0.1)
 
-    nx.draw_networkx_nodes(G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20)
+    nx.draw_networkx_nodes(
+        G_query, pos, node_size=10, alpha=0.8, node_color=node_colors, cmap=plt.cm.tab20
+    )
     nx.draw_networkx_edges(G_query, pos, width=1.5, alpha=0.6)
 
     # Add internal density labels for each cluster
@@ -984,11 +1234,19 @@ for search_query in search_queries:
         center_x = sum([coord[0] for coord in cluster_center]) / len(cluster_center)
         center_y = sum([coord[1] for coord in cluster_center]) / len(cluster_center)
         plt.text(
-            center_x, center_y, f"{density:.3f}", fontsize=10, color="black", 
-            horizontalalignment='center', bbox=dict(facecolor="white", alpha=0.5, boxstyle="round,pad=0.3")
+            center_x,
+            center_y,
+            f"{density:.3f}",
+            fontsize=10,
+            color="black",
+            horizontalalignment="center",
+            bbox=dict(facecolor="white", alpha=0.5, boxstyle="round,pad=0.3"),
         )
 
-    plt.title(f"User Interaction Graph for Search Query: {search_query} (Internal Density)", fontsize=16)
+    plt.title(
+        f"User Interaction Graph for Search Query: {search_query} (Internal Density)",
+        fontsize=16,
+    )
     plt.axis("off")
     plt.show()
 ```
@@ -1000,7 +1258,9 @@ modularity_values = []
 for search_query in search_queries:
     # Filter edges with the current search query
     edges_for_query = [
-        (u, v) for u, v, data in G_filtered.edges(data=True) if data["search_query"] == search_query
+        (u, v)
+        for u, v, data in G_filtered.edges(data=True)
+        if data["search_query"] == search_query
     ]
 
     # Create a subgraph for the current search query
@@ -1027,12 +1287,12 @@ modularity_scores = [item[1] for item in modularity_values]
 
 # Create the barplot
 plt.figure(figsize=(12, 8))
-plt.barh(queries, modularity_scores, color='skyblue', edgecolor='black')
+plt.barh(queries, modularity_scores, color="skyblue", edgecolor="black")
 plt.xlabel("Modularity", fontsize=14)
 plt.ylabel("Search Query", fontsize=14)
 plt.title("Modularity Scores for Each Search Query", fontsize=16)
 plt.gca().invert_yaxis()  # Invert y-axis for better readability
-plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.grid(axis="x", linestyle="--", alpha=0.7)
 plt.show()
 ```
 
