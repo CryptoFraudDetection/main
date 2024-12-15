@@ -29,7 +29,7 @@ warnings.filterwarnings(
 )
 
 
-def get_elasticsearch_client() -> Elasticsearch:
+def get_elasticsearch_client(timeout: int = 60) -> Elasticsearch:
     """Get the Elasticsearch client.
 
     Returns:
@@ -43,4 +43,5 @@ def get_elasticsearch_client() -> Elasticsearch:
         hosts=ELASTICSEARCH_HOSTNAME,
         api_key=ELASTICSEARCH_API_KEY,
         verify_certs=False,
+        timeout=timeout
     )

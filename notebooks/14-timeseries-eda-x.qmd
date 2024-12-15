@@ -89,7 +89,7 @@ plt.subplots_adjust(hspace=0.3)
 plt.show()
 ```
 
-In this plot we can see the Count of Tweets of every coin over the time. In red we can see the start and enddate which we are interested in. Some peaks in the Bitcoin Timeseries are very high because this Data is from a time where we test scraped without the Timeblock-function and we dont want to delete this data.
+In this plot we can see the Count of Tweets of every coin over the time. In red we can see the start and enddate which we are interested in. Some peaks in the Bitcoin Timeseries are very high because this Data is from a time where we test scraped without the Timeblock-function and we dont want to delete this data. Same happend to FTT
 
 ```{python}
 #cut out coins of test data
@@ -104,8 +104,39 @@ words_list = ['moon', 'mooon', 'to 0', 'to zero', 'scam', 'fraud', 'rug', 'rugpu
 ```
 
 ```{python}
+#price data
 
+df_btc = pd.read_csv('../data/raw/coin_price_data/btc.csv')
+df_link = pd.read_csv('../data/raw/coin_price_data/link.csv')
+df_avax = pd.read_csv('../data/raw/coin_price_data/avax.csv')
+df_beer = pd.read_csv('../data/raw/coin_price_data/beer.csv')
+df_bitforex = pd.read_csv('../data/raw/coin_price_data/bitforex.csv')
+df_sta = pd.read_csv('../data/raw/coin_price_data/sta.csv')
+df_rune = pd.read_csv('../data/raw/coin_price_data/rune.csv')
+df_teddydoge = pd.read_csv('../data/raw/coin_price_data/teddydoge.csv')
+df_luna = pd.read_csv('../data/raw/coin_price_data/luna.csv')
+df_safemoon = pd.read_csv('../data/raw/coin_price_data/safemoon.csv')
+df_atom = pd.read_csv('../data/raw/coin_price_data/atom.csv')
+df_ftx = pd.read_csv('../data/raw/coin_price_data/ftx.csv')
+df_eth = pd.read_csv('../data/raw/coin_price_data/eth.csv')
 
+#time to datetime
+df_btc['time'] = pd.to_datetime(df_btc['time'])
+df_link['time'] = pd.to_datetime(df_link['time'])
+df_avax['time'] = pd.to_datetime(df_avax['time'])
+df_beer['time'] = pd.to_datetime(df_beer['time'])
+df_bitforex['time'] = pd.to_datetime(df_bitforex['time'])
+df_sta['time'] = pd.to_datetime(df_sta['time'])
+df_rune['time'] = pd.to_datetime(df_rune['time'])
+df_teddydoge['time'] = pd.to_datetime(df_teddydoge['time'])
+df_luna['time'] = pd.to_datetime(df_luna['time'])
+df_safemoon['time'] = pd.to_datetime(df_safemoon['time'])
+df_atom['time'] = pd.to_datetime(df_atom['time'])
+df_ftx['time'] = pd.to_datetime(df_ftx['time'])
+df_eth['time'] = pd.to_datetime(df_eth['time'])
+```
+
+```{python}
 # Function to generate heatmaps
 def create_heatmaps(df, words_list):
     for keyword in df['searchkeyword'].unique():
@@ -147,3 +178,37 @@ create_heatmaps(df_train, words_list)
 ```
 
 In these plot we can see heatmaps for every coin in the Trainset showing how much some words occured over time. It is visible, that words like moon or pump are a little bit more used in Scamcoins.
+
+```{python}
+#plot all close prices of all coins as subplots with their own x axis
+fig, axes = plt.subplots(4, 3, figsize=(20, 20), sharex=True)
+axes = axes.flatten()
+
+for i, (coin_df, coin_name) in enumerate([
+    (df_btc, 'Bitcoin'),
+    (df_eth, 'Ethereum'),
+    (df_link, 'Chainlink'),
+    (df_rune, 'THORChain'),
+    (df_atom, 'Cosmos'),
+    (df_bitforex, 'BitForex'),
+    (df_avax, 'Avalanche'),
+    (df_luna, 'Terra Luna'),
+    (df_ftx, 'FTX Token'),
+    (df_safemoon, 'Safe Moon'),
+    (df_sta, 'STOA Network'),
+    (df_teddydoge, 'Teddy Doge')
+]):
+    ax = axes[i]
+    ax.plot(coin_df['time'], coin_df['close'])
+    ax.set_title(coin_name)
+    ax.set_ylabel('Close Price')
+    ax.set_xlabel('Date')
+    ax.grid(True)
+    ax.tick_params(axis='x', rotation=45)
+    
+plt.tight_layout()
+plt.suptitle('Close Prices of Coins over Time', y=1.02)
+plt.subplots_adjust(hspace=0.3)
+plt.show()
+```
+
