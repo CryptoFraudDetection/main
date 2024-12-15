@@ -9,7 +9,7 @@ from collections import defaultdict
 import pandas as pd
 import swifter  # noqa: F401
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import MultinomialNB
 from tqdm.notebook import tqdm
 ```
@@ -279,18 +279,17 @@ for i, coin in tqdm(enumerate(df_subsets.coin.unique()), total=len(df_subsets.co
     # Predicting the validation set
     X_validation = vectorizer.transform(df_validation["text"])
     y_validation = df_validation["fraud"].to_numpy()
-    y_pred = clf.predict(X_validation)
+    y_pred = clf.predict_proba(X_validation)
 
     # calculating metrics for left out coin
-    metrics[i] = (
-        {
-            "coin_left_out": coin,
-            "accuracy": accuracy_score(y_validation, y_pred),
-            "confusion_matrix": confusion_matrix(y_validation, y_pred),
-        },
-    )
-
-    # idea: for each coin, visualize until which date the model is able to predict frauds
+    metrics[i] = {
+        "coin_left_out": coin,
+        "coin_split_date": df_validation["split_date"].to_list(),
+        "coin_fraud": df_validation["fraud"].to_list(),
+        "accuracy": 1 * (y_pred[:, 1].round() == y_validation),
+        "y_pred": y_pred[:, 1].round(3),
+        "y_true": y_validation,
+    }
 
     # deleting dataframes to free up memory
     del df_fitting
@@ -298,6 +297,35 @@ for i, coin in tqdm(enumerate(df_subsets.coin.unique()), total=len(df_subsets.co
 ```
 
 ```{python}
-metrics
+# idea: for each coin, visualize until which date the model is able to predict frauds
+import altair as alt
+
+for i in metrics.keys():
+
+    df_metrics = pd.DataFrame(metrics[i])
+    df_metrics["coin_fraud"] = df_metrics["coin_fraud"].astype(int)
+    df_metrics["coin_split_date"] = pd.to_datetime(df_metrics["coin_split_date"])
+
+    chart = (
+        alt.Chart(df_metrics)
+        .mark_area(
+            interpolate="step-after",
+            opacity=0.6,
+            line=True,
+        )
+        .encode(
+            x=alt.X("coin_split_date", title="Date").axis(format="%Y-%m-%d", labelAngle=-90),
+            y=alt.Y("accuracy", title="Accuracy", scale=alt.Scale(domain=[0,1])).axis(format="%"),
+            tooltip=[
+                alt.Tooltip("coin_split_date", title="Date", format="%Y-%m-%d"),
+                alt.Tooltip("accuracy", title="Accuracy"),
+            ],
+        )
+        .properties(title=f"Accuracy for {df_metrics['coin_left_out'].iloc[0]}, correct label: {"fraud" if df_metrics['coin_fraud'].iloc[0] else "not fraud"}",
+                    width=500,
+                    height=50)
+    )
+
+    display(chart)
 ```
 
