@@ -1,6 +1,6 @@
 import transformers
 from numpy import linalg
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 import CryptoFraudDetection.utils.logger as logger
 
@@ -63,6 +63,7 @@ class Embedder:
             self._logger.debug(f"Embedding text {i}/{len(text_list)}: {text}")
             embedding = self.model.encode(text)
             self.embeddings.append(embedding)
+
 
         if len(self.embeddings) == 1:
             return self.embeddings[0]
