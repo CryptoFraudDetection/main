@@ -1,0 +1,264 @@
+---
+jupyter: python3
+---
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import torch
+from datetime import datetime
+```
+
+```{python}
+df_btc = pd.read_csv('../data/raw/coin_price_data/btc.csv')
+df_link = pd.read_csv('../data/raw/coin_price_data/link.csv')
+df_avax = pd.read_csv('../data/raw/coin_price_data/avax.csv')
+df_beer = pd.read_csv('../data/raw/coin_price_data/beer.csv')
+df_bitforex = pd.read_csv('../data/raw/coin_price_data/bitforex.csv')
+df_sta = pd.read_csv('../data/raw/coin_price_data/sta.csv')
+df_rune = pd.read_csv('../data/raw/coin_price_data/rune.csv')
+df_teddydoge = pd.read_csv('../data/raw/coin_price_data/teddydoge.csv')
+df_luna = pd.read_csv('../data/raw/coin_price_data/luna.csv')
+df_safemoon = pd.read_csv('../data/raw/coin_price_data/safemoon.csv')
+df_atom = pd.read_csv('../data/raw/coin_price_data/atom.csv')
+df_ftx = pd.read_csv('../data/raw/coin_price_data/ftx.csv')
+df_eth = pd.read_csv('../data/raw/coin_price_data/eth.csv')
+
+#time to datetime
+df_btc['time'] = pd.to_datetime(df_btc['time'])
+df_link['time'] = pd.to_datetime(df_link['time'])
+df_avax['time'] = pd.to_datetime(df_avax['time'])
+df_beer['time'] = pd.to_datetime(df_beer['time'])
+df_bitforex['time'] = pd.to_datetime(df_bitforex['time'])
+df_sta['time'] = pd.to_datetime(df_sta['time'])
+df_rune['time'] = pd.to_datetime(df_rune['time'])
+df_teddydoge['time'] = pd.to_datetime(df_teddydoge['time'])
+df_luna['time'] = pd.to_datetime(df_luna['time'])
+df_safemoon['time'] = pd.to_datetime(df_safemoon['time'])
+df_atom['time'] = pd.to_datetime(df_atom['time'])
+df_ftx['time'] = pd.to_datetime(df_ftx['time'])
+df_eth['time'] = pd.to_datetime(df_eth['time'])
+
+
+coin_test = ['FTX Token', 'Safe Moon', 'Ethereum', 'Cosmos']
+
+df_x = pd.read_parquet('../data/processed/x_posts_embeddings.parquet')
+```
+
+```{python}
+df_btc.columns
+```
+
+```{python}
+df_x.columns
+```
+
+
+```{python}
+#to datetime
+df_x['timestamp'] = pd.to_datetime(df_x['timestamp'])
+df_x.head(7)
+```
+
+```{python}
+def price_dfs_to_tensor(price_dfs):
+    """
+    Erstellt einen PyTorch-Tensor aus einer Sammlung von Preis-DataFrames.
+    Jeder Coin hat seine eigene interne Zählung für die Zeitschritte.
+    
+    Args:
+        price_dfs (dict): Ein Dictionary, bei dem der Schlüssel der Coin-Name ist
+                          und der Wert ein DataFrame mit Preiszeitreihen ist.
+                          Der DataFrame muss die Spalten ['time', 'open', 'high', 'low', 'close', 'volume'] enthalten.
+    
+    Returns:
+        torch_tensor (torch.Tensor): Ein Tensor der Form [num_coins, num_features, time_steps].
+        coins (list): Liste der Coins in der Reihenfolge des Tensors.
+        time_indices (dict): Dictionary mit Coins als Schlüssel und deren Zeitstempel als `pd.DatetimeIndex`.
+    """
+    required_columns = ['time', 'open', 'high', 'low', 'close', 'volume']
+    for coin, df in price_dfs.items():
+        if not all(col in df.columns for col in required_columns):
+            raise ValueError(f"DataFrame für {coin} fehlt eine oder mehrere benötigte Spalten: {required_columns}")
+    
+    # Initialisiere Variablen
+    coins = list(price_dfs.keys())
+    num_coins = len(coins)
+    num_features = len(required_columns) - 1  # Exklusive 'time'
+    max_time_steps = max(len(df) for df in price_dfs.values())  # Maximale Zeitpunkte über alle Coins
+    
+    # Initialisiere den Tensor
+    tensor = np.zeros((num_coins, num_features, max_time_steps))
+    time_indices = {}
+    
+    # Fülle den Tensor mit den Daten für jeden Coin
+    for i, coin in enumerate(coins):
+        df = price_dfs[coin].sort_values(by="time")  # Sortiere nach Zeit
+        time_indices[coin] = pd.to_datetime(df["time"])  # Speichere die Zeitachse
+        tensor[i, :, :len(df)] = df[['open', 'high', 'low', 'close', 'volume']].values.T  # Transponiere Features
+    
+    # Konvertiere zu PyTorch-Tensor
+    torch_tensor = torch.tensor(tensor, dtype=torch.float32)
+    
+    return torch_tensor, coins, time_indices
+```
+
+```{python}
+#unique searchkeywords df _x
+df_x['searchkeyword'].unique()
+```
+
+```{python}
+price_dict_train = {'Bitcoin': df_btc, 'Chainlink': df_link, 'Avalanche': df_avax, 'BeerCoin': df_beer, 'BitForex': df_bitforex, 'STOA Network': df_sta, 'THORChain': df_rune, 'Teddy Doge': df_teddydoge, 'Terra Luna': df_luna}
+price_dict_test = {'FTX Token': df_ftx, 'Safe Moon': df_safemoon, 'Ethereum': df_eth, 'Cosmos': df_atom}
+```
+
+```{python}
+train_price_tensor, train_coins, train_time_indices = price_dfs_to_tensor(price_dict_train)
+test_price_tensor, test_coins, test_time_indices = price_dfs_to_tensor(price_dict_test)
+```
+
+```{python}
+#display all tensor dimensions
+train_price_tensor.shape, test_price_tensor.shape
+```
+
+```{python}
+scam_list_train = ['BeerCoin', 'BitForex', 'STOA Network', 'Teddy Doge', 'Terra Luna']
+scam_list_test = ['FTX Token', 'Safe Moon', 'Ethereum', 'Cosmos']
+```
+
+```{python}
+
+def combine_price_and_emb_to_tensors(price_dfs, tweets_df, scam_coins, embedding_dim=512):
+    """
+    Kombiniert die Preis- und Tweet-Daten in einem großen Tensor und fügt die Zielvariable (y),
+    die Anzahl der Embeddings pro Zeitschritt und die zugehörigen Zeitstempel (pro Coin) hinzu.
+    
+    Args:
+        price_dfs (dict): Dictionary mit Preis-Daten pro Coin (DataFrame).
+                          Muss Spalten ['time', 'open', 'high', 'low', 'close', 'volume'] enthalten.
+        tweets_df (pd.DataFrame): DataFrame mit Tweets und Embeddings.
+                                  Muss Spalten ['timestamp', 'likes', 'comments', 'searchkeyword', 'embedding'] enthalten.
+        scam_coins (list): Liste der Coins (searchkeyword), die als Scam klassifiziert sind.
+        embedding_dim (int): Dimension der Embeddings (default: 512).
+    
+    Returns:
+        combined_tensor (torch.Tensor): Ein Tensor der Form [num_coins, num_features_total, time_steps].
+                                        num_features_total = price_features + embedding_dim + 3 (Likes, Comments, Anzahl Vektoren).
+        y_tensor (torch.Tensor): Ziel-Tensor der Form [num_coins, time_steps].
+        time_steps_per_coin (dict): Dictionary mit Coins als Schlüssel und Listen von Zeitstempeln als Werte.
+        coins (list): Liste der Coin-Namen in der Reihenfolge des Tensors.
+    """
+    # Konvertiere den Zeitstempel in datetime
+    tweets_df["timestamp"] = pd.to_datetime(tweets_df["timestamp"])
+    
+    # Initialisiere Variablen
+    coins = list(price_dfs.keys())
+    num_coins = len(coins)
+    price_features = ['open', 'high', 'low', 'close', 'volume']
+    num_price_features = len(price_features)
+    num_features_total = num_price_features + embedding_dim + 3  # Preis-Features + Embeddings + Likes + Comments + Count
+    
+    # Bestimme die maximale Anzahl der Zeitpunkte
+    max_time_steps = max(len(df) for df in price_dfs.values())
+    
+    # Initialisiere den kombinierten Tensor und den Ziel-Tensor
+    combined_tensor = torch.zeros((num_coins, num_features_total, max_time_steps), dtype=torch.float32)
+    y_tensor = torch.zeros((num_coins, max_time_steps), dtype=torch.float32)
+    
+    # Initialisiere ein Dictionary für Zeitstempel pro Coin
+    time_steps_per_coin = {}
+    
+    # Iteriere über die Coins
+    for coin_idx, coin in enumerate(coins):
+        # Preis-Daten verarbeiten
+        price_df = price_dfs[coin].sort_values(by="time")
+        time_index = pd.to_datetime(price_df["time"]).dt.tz_localize("UTC")  # Zeitachse auf UTC setzen
+        
+        # Konvertiere `time_index` zu einem echten `DatetimeIndex`
+        time_index = pd.DatetimeIndex(time_index)
+        
+        # Tweets für den aktuellen Coin
+        coin_tweets = tweets_df[tweets_df["searchkeyword"] == coin]
+        
+        # Initialisiere ein NumPy-Array für Aggregation
+        agg_array = np.zeros((len(time_index), 3 + embedding_dim))  # 3 (Likes, Comments, Count) + Embedding-Dimensionen
+        
+        # Tweets aggregieren
+        for _, row in coin_tweets.iterrows():
+            # Finde das passende 4h-Intervall
+            interval_index = time_index.get_indexer([row["timestamp"]], method="pad")[0]
+            
+            # Addiere Likes, Kommentare und Embeddings
+            agg_array[interval_index, 0] += row["likes"]  # Likes
+            agg_array[interval_index, 1] += row["comments"]  # Comments
+            agg_array[interval_index, 2] += 1  # Anzahl der Embeddings
+            agg_array[interval_index, 3:] += row["embedding"]  # Embeddings
+        
+        for i in range(len(agg_array)):
+            if agg_array[i, 2] > 0:  # Wenn mindestens ein Tweet existiert
+                agg_array[i, 3:] /= agg_array[i, 2]
+        
+        # Erstelle einen DataFrame aus dem aggregierten Array
+        agg_data = pd.DataFrame(
+            agg_array,
+            index=time_index,
+            columns=["likes", "comments", "count"] + [f"embedding_{i}" for i in range(embedding_dim)]
+        )
+        
+        # Kombiniere Preis- und Tweet-Daten in einem Tensor
+        combined_features = price_features + ["likes", "comments", "count"] + [f"embedding_{i}" for i in range(embedding_dim)]
+        combined_data = pd.concat([price_df[price_features].reset_index(drop=True), 
+                                   agg_data.reset_index(drop=True)], axis=1)
+        combined_tensor[coin_idx, :, :len(price_df)] = torch.tensor(combined_data[combined_features].values.T, dtype=torch.float32)
+        
+        # Zielwert setzen: 1 für Scam-Coins, 0 sonst
+        y_value = 1 if coin in scam_coins else 0
+        y_tensor[coin_idx, :len(price_df)] = y_value
+        
+        # Speichere die Zeitstempel für diesen Coin
+        time_steps_per_coin[coin] = list(time_index)
+    
+    return combined_tensor, y_tensor, time_steps_per_coin, coins
+
+
+train_tensor, y_train, train_time_steps, train_coins = combine_price_and_emb_to_tensors(price_dict_train, df_x, scam_list_train)
+test_tensor, y_test, test_time_steps, test_coins = combine_price_and_emb_to_tensors(price_dict_test, df_x, scam_list_test)
+```
+
+```{python}
+#display shapes
+display(train_tensor.shape, y_train.shape, train_coins,
+        test_tensor.shape, y_test.shape, test_coins)
+```
+
+```{python}
+fig, ax1 = plt.subplots(figsize=(12, 6))
+
+# Plot der ersten Embedding-Dimension
+time_steps = train_tensor.shape[2]  # Anzahl der Zeitschritte
+embedding_dim = 265  # Die erste Dimension der Embeddings
+embedding_values = train_tensor[4, 7 + embedding_dim - 1, :].numpy()  # Embedding-Werte
+ax1.plot(range(time_steps), embedding_values, color='blue', label=f"Embedding Dimension {embedding_dim}")
+ax1.set_xlabel("Zeitpunkte")
+ax1.set_ylabel(f"Embedding Dimension {embedding_dim} Wert", color='blue')
+ax1.tick_params(axis='y', labelcolor='blue')
+ax1.legend(loc="upper left")
+
+# Plot des Preises (Close-Wert) auf einer zweiten Y-Achse
+ax2 = ax1.twinx()
+close_values = train_tensor[4, 3, :].numpy()  # Close-Werte (Feature 3)
+ax2.plot(range(time_steps), close_values, color='orange', label="Preis (Close)")
+ax2.set_ylabel("Preis (Close)", color='orange')
+ax2.tick_params(axis='y', labelcolor='orange')
+ax2.legend(loc="upper right")
+
+# Titel und Grid
+plt.title(f"Embedding Dimension {embedding_dim} und Preis (Close) über Zeit (erster Coin)")
+plt.grid()
+plt.show()
+```
+
