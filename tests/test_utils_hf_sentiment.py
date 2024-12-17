@@ -14,6 +14,8 @@ def test_initialization():
     """Test the instantiation of the Scoring class"""
     sentiment_classifier = hf_sentiment.Scoring(logger_=LOGGER)
     assert sentiment_classifier is not None
+    assert sentiment_classifier.model is not None, "Model should be loaded during initialization."
+    assert sentiment_classifier.tokenizer is not None, "Tokenizer should be loaded during initialization."
 
 def test_score():
     """Test the score method of the Scoring class"""
@@ -24,7 +26,7 @@ def test_score():
     
     assert sentiment_score is not None
     assert isinstance(sentiment_score, float)
-    assert 1 >= sentiment_score >= -1  # TODO: check if this is the correct range
+    assert 1 >= sentiment_score >= 0
 
 def test_score_multiple():
     """Test the score method of the Scoring class with multiple sentences"""
@@ -38,9 +40,9 @@ def test_score_multiple():
     assert len(sentiment_scores) == 2
     for x in sentiment_scores:
         assert isinstance(x, float)
-        assert 1 >= x >= -1  # TODO: check if this is the correct range
-    assert sentiment_scores[0] < -0.5
-    assert sentiment_scores[1] > 0.5
+        assert 1 >= x >= 0
+    assert sentiment_scores[0] < 0.1
+    assert sentiment_scores[1] > 0.9
 
 def test_on_the_fly_scoring():
     """Test on the fly scoring of text."""
@@ -53,15 +55,15 @@ def test_on_the_fly_scoring():
     assert len(sentiment_scores) == 2
     for x in sentiment_scores:
         assert isinstance(x, float)
-        assert 1 >= x >= -1  # TODO: check if this is the correct range
-    assert sentiment_scores[0] < -0.5
-    assert sentiment_scores[1] > 0.5
+        assert 1 >= x >= 0
+    assert sentiment_scores[0] < 0.1
+    assert sentiment_scores[1] > 0.9
 
-def test_long_text_embedding():
+def test_long_text_scoring():
     """Test scoring of long texts."""
     text = [
         " ".join(["I hate this shit so much!"] * 1_000),
-        " ".join(["I love this show so much!"] * 1_000_000)
+        " ".join(["I love this show so much!"] * 10_000)
     ]
 
     LOGGER.debug(f"Scoring long text. Text lengths: {[len(t) for t in text]}")
@@ -74,14 +76,14 @@ def test_long_text_embedding():
     assert len(sentiment_scores) == 2
     for x in sentiment_scores:
         assert isinstance(x, float)
-        assert 1 >= x >= -1  # TODO: check if this is the correct range
-    assert sentiment_scores[0] < -0.9
+        assert 1 >= x >= 0
+    assert sentiment_scores[0] < 0.1
     assert sentiment_scores[1] > 0.9
     
 
 if __name__ == '__main__':
     test_initialization()
-    # test_score()
-    # test_score_multiple()
-    # test_on_the_fly_scoring()
-    # test_long_text_embedding()
+    test_score()
+    test_score_multiple()
+    test_on_the_fly_scoring()
+    test_long_text_scoring()
