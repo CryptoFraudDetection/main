@@ -1,10 +1,13 @@
+import random
+
+import numpy as np
 import torch
 import transformers
 from tqdm import tqdm
 
+from torch.utils.data import DataLoader
 from CryptoFraudDetection.utils import logger
 from CryptoFraudDetection.utils.enums import LoggerMode
-
 
 class Scoring:
     """Performs sentiment classification using a specified model.
@@ -21,14 +24,45 @@ class Scoring:
         self,
         logger_: logger.Logger,
         model_name: str = "siebert/sentiment-roberta-large-english",
+        batch_size: int = 128,
     ):
         self._logger = logger_
+        seed = 42
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
+        # Detect device
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+            print("Using CUDA (NVIDIA GPU).")
+            self.batch_size = batch_size
+        elif torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+            print("Using Metal Performance Shaders (MPS) on macOS.")
+            self.batch_size = batch_size
+        else:
+            self.device = torch.device("cpu")
+            print("Using CPU. Consider using a GPU for faster performance.")
+            self.batch_size = batch_size // 4
+
+        # Load model and tokenizer
         self.model = transformers.AutoModelForSequenceClassification.from_pretrained(
             model_name
-        )
+        ).to(self.device)
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-        self.text = []
         self.sentiment_scores = []
+
+    def _tokenize_batch(self, batch):
+        """Tokenize a batch of text and move it to the device."""
+        tokenized_inputs = self.tokenizer(
+            batch,
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+            max_length=512,
+        )
+        return {k: v.to(self.device) for k, v in tokenized_inputs.items()}
 
     def score(self, text: list[str] | str) -> float | list:
         """Scores the given text for sentiment classification.
@@ -39,7 +73,6 @@ class Scoring:
         Returns:
             A sentiment score (float in [0, 1]) or a list of sentiment scores.
         """
-        text = text if text is not None else self.text
         if text is None:
             raise ValueError("Text must be provided for scoring.")
 
@@ -52,20 +85,23 @@ class Scoring:
         else:
             raise TypeError("Text must be a string or a list of strings.")
 
-        self.sentiment_scores = []  # Reset sentiment scores
-        for i, t in enumerate(tqdm(text)):
-            self._logger.debug(f"Scoring text {i + 1}/{len(text)}: {t}")
-            inputs = self.tokenizer(
-                t, return_tensors="pt", truncation=True, padding=True
-            )
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-            logits = outputs.logits  # Model output logits
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+        self.sentiment_scores = []   # Reset sentiment scores
 
-            # Extract the positive class probability
-            score = probs[0, 1].item()
-            self.sentiment_scores.append(score)
+        # Batch processing
+        data_loader = DataLoader(
+            text,
+            batch_size=self.batch_size,
+            collate_fn=self._tokenize_batch,
+            drop_last=False,
+        )
+
+        for batch_inputs in tqdm(data_loader, desc="Scoring batches"):
+            with torch.no_grad():
+                outputs = self.model(**batch_inputs)
+            logits = outputs.logits
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            positive_probs = probs[:, 1].tolist()  # Extract positive class probabilities
+            self.sentiment_scores.extend(positive_probs)
 
         return self.sentiment_scores[0] if single_input else self.sentiment_scores
 
@@ -74,6 +110,7 @@ def score(
     logger_: logger.Logger,
     text: list[str] | str,
     model_name: str | None = None,
+    batch_size: int | None = None,
 ) -> list | float:
     """Scores text for sentiment classification using a specified model.
 
@@ -81,6 +118,7 @@ def score(
         logger_: Logger instance for logging operations.
         text: A string or list of strings to generate sentiment scores.
         model_name: The model name to use for generating sentiment scores. Defaults to the Scoring's default.
+        batch_size: Number of texts to process in a single batch.
 
     Returns:
         A sentiment score float or a list of sentiment scores for the input text(s).
@@ -88,5 +126,8 @@ def score(
     parameters = {}
     if model_name:
         parameters["model_name"] = model_name
+    if batch_size:
+        parameters["batch_size"] = batch_size
     scorer = Scoring(logger_, **parameters)
     return scorer.score(text)
+
