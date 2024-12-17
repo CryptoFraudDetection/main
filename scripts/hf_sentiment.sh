@@ -8,6 +8,7 @@
 #SBATCH --mem=16GB                          # Memory required per node
 #SBATCH --gpus=1                            # Number of GPUs required
 #SBATCH --ntasks=1                          # Number of tasks (processes)
+#SBATCH --nodelist=server0103               # Run job on a specific server
 
 # Activate the virtual environment
 if [ -d ".venv" ]; then
