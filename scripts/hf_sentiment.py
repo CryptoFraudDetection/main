@@ -1,20 +1,3 @@
----
-title: Crypto Fraud Detection - Embedding Notebook
-author: Gabriel Torres Gamez, Florian Baumgartner, Can-Elian Barth, Aaron Brülisauer
-execute-dir: file
-output-dir: output
-toc: true
-number-sections: true
-number-depth: 2
-papersize: a4paper
-code-line-numbers: true
-code-fold: true
-code-overflow: wrap
-self-contained: true
-jupyter: python3
----
-
-```{python}
 from pathlib import Path
 
 import pandas as pd
@@ -24,21 +7,24 @@ from CryptoFraudDetection.utils import hf_sentiment
 from CryptoFraudDetection.utils import logger
 
 LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.INFO, log_dir="../logs")
-```
 
-Embed Reddit data
-
-```{python}
 reddit_parquet_path = "../data/processed/reddit_embedded.parquet"
 sentiment_reddit_parquet_path = "../data/processed/reddit_sentiment.parquet"
+twitter_parquet_path = "../data/processed/x_embedded.parquet"
+sentiment_twitter_parquet_path = "../data/processed/x_sentiment.parquet"
 
 if not Path(sentiment_reddit_parquet_path).exists():
     df = pd.read_parquet(reddit_parquet_path)
     text = df["body"].tolist()
 
     sentiment_scores = hf_sentiment.score(logger_=LOGGER, text=text)
-    print(sentiment_scores)
     df["sentiment_score"] = sentiment_scores
     df.to_parquet(sentiment_reddit_parquet_path)
-```
 
+if not Path(sentiment_twitter_parquet_path).exists():
+    df = pd.read_parquet(twitter_parquet_path)
+    text = df["tweet"].tolist()
+
+    sentiment_scores = hf_sentiment.score(logger_=LOGGER, text=text)
+    df["sentiment_score"] = sentiment_scores
+    df.to_parquet(sentiment_twitter_parquet_path)
