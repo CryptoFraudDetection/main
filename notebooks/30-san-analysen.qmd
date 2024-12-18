@@ -14,7 +14,9 @@ import altair as alt
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
+from community import community_louvain
 from IPython.display import Image, display
+from tqdm.notebook import tqdm
 
 alt.themes.enable("dark")
 ```
@@ -34,9 +36,6 @@ df[datetime_columns] = df[datetime_columns].apply(
     pd.to_datetime,
     errors="coerce",
 )
-
-fraud_coins = [coin["name"] for coin in coins if coin["fraud"]]
-df["fraud"] = df["search_query"].isin(fraud_coins).astype(int)
 ```
 
 ## EDA
@@ -629,21 +628,9 @@ As some algorithms do not work on directed graphs it might be necessary to conve
 The aggregation is done on the data frame and a glimpse at the data is provided (sorted by some edge attribute):
 
 ```{python}
-dummies_df = shrinked_df.copy()
-# convert coin names to snake_case
-dummies_df["search_query"] = (
-    dummies_df["search_query"]
-    .str.replace(r"[^a-zA-Z0-9]", "_", regex=True)
-    .str.lower()
-)
-# Convert coin column to dummy columns
-dummies_df = dummies_df.join(dummies_df.search_query.str.get_dummies()).drop(
-    columns="search_query",
-)
-
 # Add parent user column (author of the comment/post the user is replying to)
-parent_user_df = dummies_df.merge(
-    dummies_df[["id", "author"]].rename(
+parent_user_df = shrinked_df.copy().merge(
+    shrinked_df[["id", "author"]].rename(
         columns={"id": "parent_id", "author": "parent_user"},
     ),
     on="parent_id",
@@ -665,25 +652,26 @@ agg_columns.remove("depth")  # not of interest to aggregated edges
 # Filter for comments
 comments_df = keyword_df.query("depth >= 0").copy()
 
-# Group and aggregate comments
-grouped_comments_df = comments_df.groupby(
-    ["author", "parent_user"],
-    as_index=False,
-).agg(
-    weight=("score", "size"),
-    mean_score=("score", "mean"),
-    **{col: (col, "sum") for col in agg_columns},
-)
-grouped_comments_df["fraud_ratio"] = (
-    grouped_comments_df["fraud"] / grouped_comments_df["weight"]
-)
 
-# Display top edges
-cols = {"weight", "score", "fraud_ratio"} | set(patterns.keys())
-for column in cols:
-    print(f"Top edges (sorted by {column}):")
-    display(grouped_comments_df.sort_values(column, ascending=False).head(5))
+def group_comments_df(comments_df: pd.DataFrame, coin: str) -> pd.DataFrame:
+    comments_df = comments_df.query(f"search_query == '{coin}'")
+    # Group and aggregate comments
+    return comments_df.groupby(
+        ["author", "parent_user"],
+        as_index=False,
+    ).agg(
+        weight=("score", "size"),
+        mean_score=("score", "mean"),
+        **{col: (col, "sum") for col in agg_columns},
+    )
+
+
+grouped_comment_dfs = [
+    group_comments_df(comments_df, coin) for coin in train_coins
+]
 ```
+
+TODO: update text
 
 Edges between users with unknown user names are high up in the `count` and `weight` scores as they are all grouped together. Their comments are kept for now, as they might give insight, but it is important to note, that probably multiple users where put together into `None`. Edges between users with unknown names will be kept as a self loop edge on the node `None`.
 
@@ -717,60 +705,71 @@ def prefix_column(
     )
 
 
-# Outgoing edge stats per node
-grouped_out_comments_df = prefix_column(
-    (
-        grouped_comments_df.drop(columns="parent_user")
-        .groupby("author", as_index=False)
-        .sum()
-    ),
-    "out_comment_",
-)
+grouped_out_comments_dfs = []
+grouped_in_comments_dfs = []
+
+for coin_df in grouped_comment_dfs:
+    # Outgoing edge stats per node
+    grouped_out_comments_dfs.append(
+        prefix_column(
+            (
+                coin_df.drop(columns="parent_user")
+                .groupby("author", as_index=False)
+                .sum()
+            ),
+            "out_comment_",
+        ),
+    )
+
+    # Incomming edge stats per node
+    grouped_in_comments_dfs.append(
+        prefix_column(
+            (
+                coin_df.drop(columns="author")
+                .groupby("parent_user", as_index=False)
+                .sum()
+                .rename(columns={"parent_user": "author"})
+            ),
+            "in_comment_",
+        ),
+    )
 
 
-# Incomming edge stats per node
-grouped_in_comments_df = prefix_column(
-    (
-        grouped_comments_df.drop(columns="author")
-        .groupby("parent_user", as_index=False)
-        .sum()
-        .rename(columns={"parent_user": "author"})
-    ),
-    "in_comment_",
-)
+def group_post_df(post_df: pd.DataFrame, coin: str) -> pd.DataFrame:
+    return prefix_column(
+        (
+            post_df.query(f"search_query == '{coin}'")
+            .groupby("author", as_index=False)
+            .agg(
+                count=("score", "size"),
+                mean_score=("score", "mean"),
+                **{col: (col, "sum") for col in agg_columns},
+            )
+        ),
+        "post_",
+    )
 
-# Post stats per node
-grouped_posts_df = prefix_column(
-    (
-        keyword_df.query("depth == -1")
-        .copy()
-        .groupby("author", as_index=False)
-        .agg(
-            count=("score", "size"),
-            mean_score=("score", "mean"),
-            **{col: (col, "sum") for col in agg_columns},
-        )
-    ),
-    "post_",
-)
-grouped_posts_df["post_fraud_ratio"] = (
-    grouped_posts_df["post_fraud"] / grouped_posts_df["post_count"]
-)
 
-# Join the node data frames
-node_df = (
-    grouped_posts_df.merge(grouped_out_comments_df, "outer")
-    .merge(grouped_in_comments_df, "outer")
-    .fillna(0)
-)
+post_df = keyword_df.query("depth == -1")
 
-# Display top nodes
-columns = ["post_count", "post_score"] + [
-    f"{p}_comment_{x}" for x in patterns for p in ("out", "in")
-]
-for column in columns:
-    print(f"Top nodes (sorted by {column}):")
-    display(node_df.sort_values(column, ascending=False).head(5))
+grouped_post_dfs = [group_post_df(post_df, coin) for coin in train_coins]
+
+node_dfs = []
+for grouped_comments_df, grouped_in_comments_df, grouped_posts_df in zip(
+    grouped_out_comments_dfs,
+    grouped_in_comments_dfs,
+    grouped_post_dfs,
+    strict=False,
+):
+    node_dfs.append(
+        grouped_posts_df.merge(grouped_comments_df, "outer")
+        .merge(grouped_in_comments_df, "outer")
+        .fillna(0),
+    )
+```
+
+```{python}
+btc_graph_df = node_dfs[0]
 ```
 
 ### Network Graph Creation
@@ -810,22 +809,25 @@ def create_graph_from_dataframe(
     return G
 
 
-graph_file_path = "../data/processed/comments_network.gexf"
+graphs = {}
+for i, coin in enumerate(train_coins):
+    graph_file_path = f"../data/processed/{coin}.gexf"
 
-G = None
-with contextlib.suppress(Exception):
-    G = nx.read_gexf(graph_file_path)
-    print(f"Graph loaded from {graph_file_path}")
+    G = None
+    with contextlib.suppress(Exception):
+        G = nx.read_gexf(graph_file_path)
+        print(f"Graph loaded from {graph_file_path}")
 
-if G is None:
-    G = create_graph_from_dataframe(node_df)
+    if G is None:
+        G = create_graph_from_dataframe(node_dfs[i])
 
-    for _, row in grouped_comments_df.iterrows():
-        edge_attributes = row[2:].to_dict()
-        G.add_edge(row["author"], row["parent_user"], **edge_attributes)
+        for _, row in grouped_comment_dfs[i].iterrows():
+            edge_attributes = row[2:].to_dict()
+            G.add_edge(row["author"], row["parent_user"], **edge_attributes)
 
-    nx.write_gexf(G, graph_file_path)
-    print(f"Graph saved as: {graph_file_path}")
+        nx.write_gexf(G, graph_file_path)
+        print(f"Graph saved as: {graph_file_path}")
+    graphs[coin] = G
 ```
 
 The top nodes for each edge attribute are visualized to get some insights:
@@ -912,8 +914,8 @@ def get_node_attributes_from_df(
     ]
 
 
-for node_attr in get_node_attributes_from_df(node_df):
-    visualize_top_nodes_graphviz(G, node_attr)
+# for node_attr in get_node_attributes_from_df(node_df):
+#     visualize_top_nodes_graphviz(G, node_attr)
 ```
 
 Notes:
@@ -942,4 +944,91 @@ Notes:
 Are there Users, which answer often to the same users?
 
 These are the User with most comments to the same user. There are many Moderator bots in the list and also None.
+
+```{python}
+def calculate_communities(graph) -> dict:
+    """Calculate the communities in a graph using the Louvain algorithm.
+
+    If the graph is directed, it is first converted to an undirected graph.
+
+    Parameters
+    ----------
+        graph (networkx.Graph): The input graph.
+
+    Returns
+    -------
+        dict: A dictionary mapping each node to its community ID.
+
+    """
+    # Convert to undirected graph if necessary
+    if isinstance(graph, nx.DiGraph):  # Check if the graph is directed
+        graph = graph.to_undirected()
+
+    # Apply the Louvain algorithm
+    communities = community_louvain.best_partition(graph)
+    return communities
+
+
+def calculate_density(graph) -> float:
+    """Calculate the density of a graph.
+
+    If the graph is directed, it is first converted to an undirected graph.
+
+    Parameters
+    ----------
+        graph (networkx.Graph): The input graph.
+
+    Returns
+    -------
+        float: The density of the graph, a value between 0 and 1.
+
+    """
+    # Convert to undirected graph if necessary
+    if isinstance(graph, nx.DiGraph):  # Check if the graph is directed
+        graph = graph.to_undirected()
+
+    # Calculate the density
+    density = nx.density(graph)
+    return density
+
+
+def calculate_degree_centrality(graph) -> float:
+    """Calculate the degree centrality for each node in the graph.
+
+    Parameters
+    ----------
+        graph (networkx.Graph): The input graph.
+
+    Returns
+    -------
+        dict: A dictionary mapping each node to its degree centrality value.
+
+    """
+    # Convert to undirected graph if necessary
+    if isinstance(graph, nx.DiGraph):  # Check if the graph is directed
+        graph = graph.to_undirected()
+
+    # Calculate degree centrality
+    degree_centrality = nx.degree_centrality(graph)
+    return degree_centrality
+```
+
+```{python}
+communities = {
+    coin: calculate_communities(graph) for coin, graph in tqdm(graphs.items())
+}
+```
+
+```{python}
+densities = {
+    coin: calculate_density(graph) for coin, graph in tqdm(graphs.items())
+}
+```
+
+```{python}
+degree_centralities = {
+    coin: calculate_degree_centrality(graph)
+    for coin, graph in tqdm(graphs.items())
+}
+```
 
