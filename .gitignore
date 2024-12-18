@@ -179,5 +179,6 @@ cookies/
 # Data
 data/processed/*.csv
 data/processed/*.parquet
+data/processed/*gexf
 data/reddit/*.json
 data/reddit/*json.lock
