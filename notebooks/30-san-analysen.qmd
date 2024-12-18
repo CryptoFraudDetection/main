@@ -1,0 +1,939 @@
+---
+title: Setup
+jupyter: python3
+---
+
+```{python}
+import contextlib
+import heapq
+import json
+import re
+from pathlib import Path
+
+import altair as alt
+import matplotlib.pyplot as plt
+import networkx as nx
+import pandas as pd
+from IPython.display import Image, display
+
+alt.themes.enable("dark")
+```
+
+Read data from parquet file:
+
+```{python}
+df = pd.read_parquet("../data/processed/reddit.parquet")
+with Path("../data/raw/coins.json").open() as f:
+    coins = json.load(f)
+
+train_coins = [coin["name"] for coin in coins if not coin["test"]]
+df = df[df["search_query"].isin(train_coins)].copy()
+
+datetime_columns = ["edited", "created"]
+df[datetime_columns] = df[datetime_columns].apply(
+    pd.to_datetime,
+    errors="coerce",
+)
+
+fraud_coins = [coin["name"] for coin in coins if coin["fraud"]]
+df["fraud"] = df["search_query"].isin(fraud_coins).astype(int)
+```
+
+## EDA
+
+### Data Overview
+
+Glimpse of the data:
+
+```{python}
+df.sample(5, random_state=42)
+```
+
+Some rows are comments and others are posts: Posts `depth` is set to -1 and they are missing `parent_id` as they initiate a potential discussion. Comments have `parent_id` set to the `id` of the post they are replying to and they are missing `url`, `num_comments`, `title` as they are not posts. Comments can be replies to posts or other comments and therefore a nested structure can be formed.
+
+```{python}
+df.dtypes
+```
+
+These are the columns in the data. Our Network will be an OneMode Network with `author` nodes and the directed edges being the comments (`depth>=0`).
+
+#### Crypto Coins Frequency
+
+How many posts are there for each coin?
+
+```{python}
+df.query("depth == -1")["search_query"].value_counts()
+```
+
+Some coins like Teddy Doge and BeerCoin have only a few posts. How many comments are there for each coin?
+
+```{python}
+df.query("depth > -1")["search_query"].value_counts()
+```
+
+There are multiple hundreds of commeents for each coin or more. As the comments are more important to this analysis and the coins are therefore kept.
+
+#### Score Distribution
+
+How are the scores distributed over the posts and comments in respect to there depth (reply to reply to reply etc.)? Note that posts have `depth` set to `-1`.
+
+```{python}
+depths = range(-1, 10)  # Tiefen von -1 bis 9
+scores_by_depth = [
+    df[df["depth"] == depth]["score"].dropna() for depth in depths
+]
+
+means_by_depth = [scores.mean() for scores in scores_by_depth]
+
+# Erstelle die Boxplots
+plt.figure(figsize=(12, 8))
+plt.boxplot(
+    scores_by_depth,
+    vert=False,
+    patch_artist=True,
+    tick_labels=[f"Depth {depth}" for depth in depths],
+    boxprops=dict(facecolor="lightblue", color="blue"),
+    medianprops=dict(color="red", linewidth=1.5),
+    flierprops=dict(marker="o", color="orange", markersize=5, alpha=0.5),
+)
+
+# Zeichne vertikale Linien für die Mittelwerte ein
+for i, mean in enumerate(means_by_depth):
+    plt.axvline(
+        x=mean,
+        ymin=(i + 0.25) / len(depths),
+        ymax=(i + 0.75) / len(depths),
+        color="green",
+        linewidth=1.5,
+        label="Mean" if i == 0 else "",
+    )
+
+# Plot-Details
+plt.title("Boxplot of Scores by Depth (with Mean)", fontsize=14)
+plt.xlabel("Score (Log scaled)", fontsize=12)
+plt.ylabel("Depth", fontsize=12)
+plt.xscale("log")
+plt.grid(axis="x", linestyle="--", alpha=0.7)
+plt.legend()
+plt.show()
+```
+
+In this plot its clearly visible, that deeper nested comments usually have a lower score. Posts have extreme outliers, which is visible in the logaritmic X-axis. The Distribution of the score is right-skewed because the mean is higher than the median.
+
+#### Comments and Posts Distributions per Coin and Subreddit
+
+Overview of comments (answers to other people) per coin and subreddit:
+
+```{python}
+subreddit_query = (
+    df.groupby(["search_query", "subreddit"])
+    .size()
+    .unstack()
+    .fillna(0)
+    .astype(int)
+    .reset_index()
+    .melt(id_vars="search_query")
+)
+
+c = (
+    alt.Chart(subreddit_query)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "value:Q",
+            title="Number of Comments",
+            scale={"domain": [0, 152_000]},
+        ),
+        y=alt.Y("search_query:O", title="Coin"),
+        color=alt.Color("subreddit:N", title="Subreddit"),
+        tooltip=[
+            alt.Tooltip("search_query:O", title="Coin"),
+            alt.Tooltip("subreddit:N", title="Subreddit"),
+            alt.Tooltip("value:Q", title="# of Comments"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=400,
+        title=alt.Title(text="Number of Comments per Subreddit"),
+    )
+)
+
+
+text = (
+    alt.Chart(subreddit_query)
+    .mark_text(align="left", dx=5, color="white")
+    .transform_calculate(customtooltip="datum.value")
+    .encode(
+        x=alt.X("sum(value):Q", scale={"domain": [0, 152_000]}),
+        y=alt.Y("search_query:O"),
+        text=alt.Text("sum(value):Q"),
+    )
+)
+
+c + text
+```
+
+It's clearly visible that Bitcoin is the most popular coin and CryptoCurrency is the most popular subreddit. The interest is, how fraudulent and non-fraudulent coins differ in there social media activity. Some coins (like Teddy Doge and BeerCoin) have only a few comments.
+
+Overview of main posts per coin and subreddit:
+
+```{python}
+subreddit_query_posts = (
+    df.query("depth == -1")
+    .groupby(["search_query", "subreddit"])
+    .size()
+    .unstack()
+    .fillna(0)
+    .astype(int)
+    .reset_index()
+    .melt(id_vars="search_query")
+)
+
+c = (
+    alt.Chart(subreddit_query_posts)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "value:Q",
+            title="Number of Comments",
+            scale={"domain": [0, 1_400]},
+        ),
+        y=alt.Y("search_query:O", title="Coin"),
+        color=alt.Color("subreddit:N", title="Subreddit"),
+        tooltip=[
+            alt.Tooltip("search_query:O", title="Coin"),
+            alt.Tooltip("subreddit:N", title="Subreddit"),
+            alt.Tooltip("value:Q", title="# of Comments"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=400,
+        title=alt.Title(text="Number of Posts per Subreddit"),
+    )
+)
+
+
+text = (
+    alt.Chart(subreddit_query_posts)
+    .mark_text(align="left", dx=5, color="white")
+    .transform_calculate(customtooltip="datum.value")
+    .encode(
+        x=alt.X("sum(value):Q", scale={"domain": [0, 1_400]}),
+        y=alt.Y("search_query:O"),
+        text=alt.Text("sum(value):Q"),
+    )
+)
+
+c + text
+```
+
+The distribution of posts is similar to the distribution of comments. Teddy Doge got only a few posts. This should not be an issue, as the comments (replies to other people) will be the edges in the graph.
+
+#### Comments Depth Distribution
+
+How deeply nested are the comments (replies to other people)?
+
+```{python}
+depth_df = df["depth"].value_counts().sort_index()
+
+c = (
+    alt.Chart(depth_df.reset_index())
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "depth:O",
+            title="Depth (-1 is the original post and 0 are top-level comments)",
+        ),
+        y=alt.Y(
+            "count:Q",
+            title="Number of Comments",
+            scale={"domain": [0, 240_000]},
+        ),
+        tooltip=[
+            alt.Tooltip("depth:O", title="Depth"),
+            alt.Tooltip("count:Q", title="# of Comments"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=400,
+        title=alt.Title(text="Number of Comments per Depth"),
+    )
+)
+
+text = (
+    alt.Chart(depth_df.reset_index())
+    .mark_text(align="center", dy=-8, color="white")
+    .transform_calculate(customtooltip="datum.count")
+    .encode(
+        x=alt.X("depth:O"),
+        y=alt.Y("count:Q", scale={"domain": [0, 240_000]}),
+        text=alt.Text("count:Q"),
+    )
+)
+
+c + text
+```
+
+There are ~6k posts and most comments (~200k) are direct replies to the post. The distribution decreases ~exponentially and goes to 10 levels deep.
+
+#### Comment/Post Count Distributions per User
+
+How are the number of comments distributed per user?
+
+```{python}
+comments_per_user = df.groupby("author").size()
+distribution = comments_per_user.value_counts().sort_index()
+distribution_df = distribution.reset_index()
+distribution_df.columns = ["comments_per_user", "number_of_users"]
+
+c = (
+    alt.Chart(distribution_df)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "comments_per_user:O",
+            title="Number of Comments per User (cut off at 100)",
+            scale={"domain": range(1, 101)},
+        ),
+        y=alt.Y(
+            "number_of_users:Q",
+            title="Number of Users",
+            scale=alt.Scale(
+                type="symlog",
+                domain=[0, 100_000],
+            ),
+            axis=alt.Axis(
+                values=[
+                    0,
+                    1,
+                    2,
+                    5,
+                    10,
+                    20,
+                    50,
+                    100,
+                    200,
+                    500,
+                    1_000,
+                    2_000,
+                    5_000,
+                    10_000,
+                    20_000,
+                    50_000,
+                    100_000,
+                ],
+            ),
+        ),
+        tooltip=[
+            alt.Tooltip("comments_per_user:Q", title="# of Comments per User"),
+            alt.Tooltip("number_of_users:Q", title="# of Users"),
+        ],
+    )
+    .properties(
+        width=1000,
+        height=400,
+        title=alt.Title(text="Number of Comments per User"),
+    )
+)
+
+c
+```
+
+Most users have only a few comments (~70k have only one comment). There are some users with a lot of comments (cut off at 100). How extreme are the top users?
+
+```{python}
+comments_per_user.sort_values(ascending=False).head(10)
+```
+
+Some users have a lot of comments but they have `bot`, `auto` or `mod` in their name, they are therefore probably no human. They might be official bots from the subreddit for moderation purposes.
+
+How the posts are distributed over the users:
+
+```{python}
+posts_per_user = df.query("depth == -1").groupby("author").size()
+distribution = posts_per_user.value_counts().sort_index()
+distribution_df = distribution.reset_index()
+distribution_df.columns = ["posts_per_user", "number_of_users"]
+
+c = (
+    alt.Chart(distribution_df)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "posts_per_user:O",
+            title="Number of Posts per User (cut off at 100)",
+            scale={"domain": range(1, 101)},
+        ),
+        y=alt.Y(
+            "number_of_users:Q",
+            title="Number of Users",
+            scale=alt.Scale(
+                type="symlog",
+                domain=[0, 5_000],
+                zero=True,
+            ),
+            axis=alt.Axis(
+                values=[
+                    0,
+                    1,
+                    2,
+                    5,
+                    10,
+                    20,
+                    50,
+                    100,
+                    200,
+                    500,
+                    1_000,
+                    2_000,
+                    5_000,
+                ],
+            ),
+        ),
+        tooltip=[
+            alt.Tooltip("posts_per_user:Q", title="# of Posts per User"),
+            alt.Tooltip("number_of_users:Q", title="# of Users"),
+        ],
+    )
+    .properties(
+        width=1000,
+        height=400,
+        title=alt.Title(text="Number of Posts per User"),
+    )
+)
+
+c
+```
+
+The posts are distributed unevenly as well. ~3.6k users have only one post. How extreme are the top users?
+
+```{python}
+posts_per_user.sort_values(ascending=False).head(10)
+```
+
+Some users overlap with the top commenters. Examples: `kirtash93`, `goldyluckinblokchain`
+
+#### Comment/Post Distributions over Time
+
+How are the comments and posts distributed over time?
+
+```{python}
+posts_per_coin_per_date = df.copy()
+posts_per_coin_per_date["created"] = (
+    pd.to_datetime(posts_per_coin_per_date["created"])
+    .dt.to_period("M")
+    .dt.to_timestamp()
+)
+
+posts_per_coin_per_date = posts_per_coin_per_date.query(
+    "created >= '2020-01-01'",
+).query("depth >= 0")
+
+posts_per_coin_per_date = (
+    posts_per_coin_per_date.groupby(["search_query", "created"])["id"]
+    .count()
+    .reset_index()
+    .rename(columns={"id": "number_of_comments"})
+)
+
+posts_per_coin_per_date["number_of_comments_rel"] = posts_per_coin_per_date[
+    "number_of_comments"
+] / posts_per_coin_per_date.groupby("search_query")[
+    "number_of_comments"
+].transform(
+    "sum",
+)
+
+step = 40
+overlap = 1
+
+c = (
+    alt.Chart(posts_per_coin_per_date, height=step)
+    .mark_area(
+        interpolate="monotone",
+        fillOpacity=0.5,
+        stroke="lightgray",
+        strokeWidth=0.5,
+    )
+    .encode(
+        x=alt.X("created:T").title("Date").axis(grid=False),
+        y=alt.Y("number_of_comments_rel:Q")
+        .axis(None)
+        .scale(range=[step, -step * overlap]),
+        color=alt.Color("search_query:N", legend=None),
+        tooltip=[
+            alt.Tooltip("yearmonth(created):T", title="Date"),
+            alt.Tooltip("search_query:N", title="Coin"),
+            alt.Tooltip("number_of_comments:Q", title="# of Comments"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=step,
+    )
+    .facet(
+        row=alt.Row("search_query:N")
+        .title(None)
+        .header(labelAngle=0, labelAlign="left"),
+    )
+    .properties(
+        title=alt.Title(
+            text="Number of Comments per Coin per Date after 2020",
+            anchor="middle",
+        ),
+        bounds="flush",
+    )
+    .configure_facet(spacing=0)
+    .configure_view(stroke=None)
+    .configure_title(anchor="end")
+)
+
+c
+```
+
+```{python}
+posts_per_coin_per_date = df.copy()
+posts_per_coin_per_date["created"] = (
+    pd.to_datetime(posts_per_coin_per_date["created"])
+    .dt.to_period("M")
+    .dt.to_timestamp()
+)
+
+posts_per_coin_per_date = posts_per_coin_per_date.query(
+    "created >= '2020-01-01'",
+).query("depth == -1")
+
+
+posts_per_coin_per_date = (
+    posts_per_coin_per_date.groupby(["search_query", "created"])["id"]
+    .count()
+    .reset_index()
+    .rename(columns={"id": "number_of_posts"})
+)
+
+posts_per_coin_per_date["number_of_posts_rel"] = posts_per_coin_per_date[
+    "number_of_posts"
+] / posts_per_coin_per_date.groupby("search_query")[
+    "number_of_posts"
+].transform("sum")
+
+posts_per_coin_per_date
+
+step = 40
+overlap = 1
+
+c = (
+    alt.Chart(posts_per_coin_per_date, height=step)
+    .mark_area(
+        interpolate="monotone",
+        fillOpacity=0.5,
+        stroke="lightgray",
+        strokeWidth=0.5,
+    )
+    .encode(
+        x=alt.X("created:T").title("Date").axis(grid=False),
+        y=alt.Y("number_of_posts_rel:Q")
+        .axis(None)
+        .scale(range=[step, -step * overlap]),
+        color=alt.Color("search_query:N", legend=None),
+        tooltip=[
+            alt.Tooltip("yearmonth(created):T", title="Date"),
+            alt.Tooltip("search_query:N", title="Coin"),
+            alt.Tooltip("number_of_posts:Q", title="# of Posts"),
+        ],
+    )
+    .properties(
+        width=800,
+        height=step,
+    )
+    .facet(
+        row=alt.Row("search_query:N")
+        .title(None)
+        .header(labelAngle=0, labelAlign="left"),
+    )
+    .properties(
+        title=alt.Title(
+            text="Number of Posts per Coin per Date after 2020",
+            anchor="middle",
+        ),
+        bounds="flush",
+    )
+    .configure_facet(spacing=0)
+    .configure_view(stroke=None)
+    .configure_title(anchor="end")
+)
+
+c
+```
+
+The plots are cut off at 2020 because there are not many posts or comments before that time (in relation to the rest of the data). Some coins have more data at the end of the timescale because we used google results to get the post URLs and google had probably some bais towards newer posts.
+
+### NA Values
+
+#### Posts
+
+How many posts are there?
+
+```{python}
+print("Number of posts:", len(df.query("depth == -1")))
+```
+
+`parent_id` is expeted to be NA for all posts. Columns with missing values for posts:
+
+```{python}
+df.query("depth == -1").isna().sum()[lambda x: x > 0]
+```
+
+Some posts have been edited but this is ignored in this analysis.
+
+#### Comments
+
+How many comments are there?
+
+```{python}
+print("Number of comments:", len(df[df["depth"] >= 0]))
+```
+
+`title`, `url` and `num_comments` are not used for comments and are expected to be NA. Which columns do have missing values for comments?
+
+```{python}
+df.query("depth >= 0").isna().sum()[lambda x: x > 0]
+```
+
+`edited` is ignored for comments as well.
+
+Posts are not of primary interest for this analysis and therefore unnecessary columns are dropped (even though they are not always NA for posts):
+
+```{python}
+columns = ["edited", "title", "url", "num_comments"]
+shrinked_df = df.drop(columns=columns)
+print("Dropped columns:")
+print(columns)
+print("Columns remaining:")
+print(shrinked_df.columns.to_list())
+```
+
+## User Interaction Network
+
+In this analysis the interactions between users is analyzed and therefore a column `paprent_user` is created with the `author` of the post/comment the user is replying to. This enables the creation of a graph with users as nodes and directed edges being the comments.
+
+### Data Preprocessing
+
+The data is grouped by `author` and `parent_user` so there is only one edge between the same nodes. The edge weights are the number of comments between the two authors. Edges get `sum(score)`, sum of critical word hit counts (example: `moon`) and number of coin occurrences as additional edge attributes.
+
+As some algorithms do not work on directed graphs it might be necessary to convert the graph to an undirected graph later on. The information in which direction the comments went would be lost, but the overall information, which users tend to interact and the word counts will be preserved.
+
+The aggregation is done on the data frame and a glimpse at the data is provided (sorted by some edge attribute):
+
+```{python}
+dummies_df = shrinked_df.copy()
+# convert coin names to snake_case
+dummies_df["search_query"] = (
+    dummies_df["search_query"]
+    .str.replace(r"[^a-zA-Z0-9]", "_", regex=True)
+    .str.lower()
+)
+# Convert coin column to dummy columns
+dummies_df = dummies_df.join(dummies_df.search_query.str.get_dummies()).drop(
+    columns="search_query",
+)
+
+# Add parent user column (author of the comment/post the user is replying to)
+parent_user_df = dummies_df.merge(
+    dummies_df[["id", "author"]].rename(
+        columns={"id": "parent_id", "author": "parent_user"},
+    ),
+    on="parent_id",
+    how="left",
+)
+
+# Keyword word hit count
+patterns = {"moon": r"moon", "pump": r"pump"}
+keyword_df = parent_user_df.copy()
+for col, pattern in patterns.items():
+    keyword_df[col] = (
+        keyword_df["body"].str.findall(pattern, flags=re.IGNORECASE).str.len()
+    )
+
+# Numeric columns will be aggregated later on for comments and posts
+agg_columns = keyword_df.select_dtypes("number").columns.to_list()
+agg_columns.remove("depth")  # not of interest to aggregated edges
+
+# Filter for comments
+comments_df = keyword_df.query("depth >= 0").copy()
+
+# Group and aggregate comments
+grouped_comments_df = comments_df.groupby(
+    ["author", "parent_user"],
+    as_index=False,
+).agg(
+    weight=("score", "size"),
+    mean_score=("score", "mean"),
+    **{col: (col, "sum") for col in agg_columns},
+)
+
+# Display top edges
+cols = {"weight", "score"} | set(patterns.keys())
+for column in cols:
+    print(f"Top edges (sorted by {column}):")
+    display(grouped_comments_df.sort_values(column, ascending=False).head(5))
+```
+
+Edges between users with unknown user names are high up in the `count` and `weight` scores as they are all grouped together. Their comments are kept for now, as they might give insight, but it is important to note, that probably multiple users where put together into `None`. Edges between users with unknown names will be kept as a self loop edge on the node `None`.
+
+`None` users and users with `mod`, `auto` or `bot` in there names are high in the list of edges sorted by `moon` or `pump` count. This might suggest, that they might not be official mods, because official mods would probably not use those words (this would have to be verified).
+
+The edge data is now aggregated to precalculate node attributes to speed up network analysis. For each node in and out sums of edge attributes are calculated by grouping by `author` or `parent_user` accordingly. The attributes are prefixed with `out_comment` and `in_comment` accordingly. The number of posts (`post_count`), sum of scores of posts (`post_scores`) and selected word counts in posts are aggregated per author as well. A glimpse at the node data is provided:
+
+```{python}
+def prefix_column(
+    df: pd.DataFrame,
+    prefix: str,
+    exclude_column: str = "author",
+) -> pd.DataFrame:
+    """Prefixes all column names in the DataFrame except one with a given string.
+
+    Args:
+        df: The DataFrame whose columns will be renamed.
+        prefix: The string to add as a prefix to the column names.
+        exclude_column: The name of the column to exclude from renaming.
+
+    Returns:
+        A new DataFrame with renamed columns.
+
+    """
+    return df.rename(
+        columns={
+            col: f"{prefix}{col}"
+            for col in df.columns
+            if col != exclude_column
+        },
+    )
+
+
+# Outgoing edge stats per node
+grouped_out_comments_df = prefix_column(
+    (
+        grouped_comments_df.drop(columns="parent_user")
+        .groupby("author", as_index=False)
+        .sum()
+    ),
+    "out_comment_",
+)
+
+
+# Incomming edge stats per node
+grouped_in_comments_df = prefix_column(
+    (
+        grouped_comments_df.drop(columns="author")
+        .groupby("parent_user", as_index=False)
+        .sum()
+        .rename(columns={"parent_user": "author"})
+    ),
+    "in_comment_",
+)
+
+# Post stats per node
+grouped_posts_df = prefix_column(
+    (
+        keyword_df.query("depth == -1")
+        .copy()
+        .groupby("author", as_index=False)
+        .agg(
+            count=("score", "size"),
+            mean_score=("score", "mean"),
+            **{col: (col, "sum") for col in agg_columns},
+        )
+    ),
+    "post_",
+)
+
+# Join the node data frames
+node_df = (
+    grouped_posts_df.merge(grouped_out_comments_df, "outer")
+    .merge(grouped_in_comments_df, "outer")
+    .fillna(0)
+)
+
+# Display top nodes
+columns = ["post_count", "post_score"] + [
+    f"{p}_comment_{x}" for x in patterns for p in ("out", "in")
+]
+for column in columns:
+    print(f"Top nodes (sorted by {column}):")
+    display(node_df.sort_values(column, ascending=False).head(5))
+```
+
+### Network Graph Creation
+
+The directed graph is created:
+
+```{python}
+def create_graph_from_dataframe(
+    df: pd.DataFrame,
+    name_column: str = "author",
+) -> nx.Graph:
+    """Create a NetworkX graph with nodes from a pandas DataFrame.
+
+    One column is used as the node name and all other columns become node
+    attributes.
+
+    Args:
+        df: The pandas DataFrame containing the data.
+        name_column: The column to use as the node name.
+
+    Returns:
+        A NetworkX graph with nodes and their attributes.
+
+    """
+    # Initialize a graph
+    G = nx.Graph()
+
+    # Set the graph name to the column containing the network name
+    G.graph["name"] = "Graph based on column: " + name_column
+
+    # Add nodes with attributes
+    G.add_nodes_from(
+        (row[name_column], row.drop(name_column).to_dict())
+        for _, row in df.iterrows()
+    )
+
+    return G
+
+
+graph_file_path = "../data/processed/comments_network.gexf"
+
+G = None
+with contextlib.suppress(Exception):
+    G = nx.read_gexf(graph_file_path)
+    print(f"Graph loaded from {graph_file_path}")
+
+if G is None:
+    G = create_graph_from_dataframe(node_df)
+
+    for _, row in grouped_comments_df.iterrows():
+        edge_attributes = row[2:].to_dict()
+        G.add_edge(row["author"], row["parent_user"], **edge_attributes)
+
+    nx.write_gexf(G, graph_file_path)
+    print(f"Graph saved as: {graph_file_path}")
+```
+
+The top nodes for each edge attribute are visualized to get some insights:
+
+```{python}
+def visualize_top_nodes_graphviz(
+    graph: nx.DiGraph,
+    attribute: str,
+    top_n: int = 10,
+    output_file: str = "graph",
+) -> None:
+    """Visualize the top N nodes based on a specified node attributes.
+
+    Nodes are visualized with their directed edges for visualization with
+    Graphviz. Ensures arrows are displayed to indicate edge direction.
+
+    Args:
+        graph: The NetworkX directed graph.
+        attribute: The node attribute to use for ranking.
+        top_n: The number of top nodes to include.
+        output_file: The base name for saving DOT and PNG files.
+
+    """
+    # Ensure the attribute exists in the nodes
+    if not all(attribute in graph.nodes[node] for node in graph.nodes):
+        msg = f"Attribute '{attribute}' not found in all nodes."
+        raise ValueError(msg)
+
+    # Find the top N nodes by the specified attribute
+    top_nodes = [
+        node
+        for node, _ in heapq.nlargest(
+            top_n,
+            graph.nodes(data=attribute),
+            key=lambda x: x[1],
+        )
+    ]
+
+    # Create a subgraph with only the top nodes (includes isolated nodes)
+    subgraph = graph.subgraph(top_nodes)
+
+    # Convert to PyGraphviz AGraph and force directed rendering
+    A = nx.nx_agraph.to_agraph(subgraph)
+    A.graph_attr["rankdir"] = "TB"  # Layout top-to-bottom
+    A.graph_attr["label"] = f"Top {top_n} Nodes by {attribute.capitalize()}"
+    A.graph_attr["labelloc"] = "top"
+    A.graph_attr["fontsize"] = 20
+
+    # Ensure directed graph and arrowheads
+    A.graph_attr["directed"] = "true"
+    for edge in A.edges():
+        edge.attr["arrowhead"] = "normal"  # Explicitly set arrowhead for edges
+
+    # Export DOT file and render as PNG
+    dot_file = f"{output_file}.dot"
+    png_file = f"{output_file}.png"
+    A.write(dot_file)
+    A.layout(prog="dot")  # Use Graphviz's dot layout
+    A.draw(png_file)
+
+    # Display the PNG in the notebook
+    display(Image(filename=png_file))
+
+
+def get_node_attributes_from_df(
+    df: pd.DataFrame,
+    keywords: tuple[str, ...] = ("count", "weight", "mean", "pump", "dump"),
+) -> list[str]:
+    """Extract column names from df that contain any of the keywords.
+
+    Args:
+        df: The DataFrame from which to extract column names.
+        keywords: A tuple of keywords to look for in column names.
+
+    Returns:
+        list: A list of column names from the DataFrame that contain one or more
+            of the specified keywords.
+
+    """
+    return [
+        attr
+        for attr in df.columns.to_list()
+        if any(keyword in attr for keyword in keywords)
+    ]
+
+
+for node_attr in get_node_attributes_from_df(node_df):
+    visualize_top_nodes_graphviz(G, node_attr)
+```
+
+Notes:
+- filter z.b. kanten mit min 10x bitcoin
+- fraud vs non-fraud
+- innerhalb von fraud oder non-fraud vergleichen
+- viel mit filter arbeiten um kleinere netzwerke zu haben
+- gephi für explorativ
+    - gexf exportieren und dann in notebook laden
+    - kann auch plot exportieren und dann in notebook laden
+    - bei filtern öffnen als neuen workspace
+    - speichern als gexf nicht als gephi
+- gelerntes anwenden
+    - ziegen dass man es auch interpretieren kan
+- attribute n_fraud/nonfraud_comments/post
+- was wir in der theorie gelernt haben zeigen wir nun dass wir es anwenden können und dass wir daraus lesen können und dass wir begründet
+- zentralitätsmass und communities und das für non-fraud vs fraud, und noch mehr
+- visualisierung ist wichtig
+- statistik, hypothesentests
+- um so zentraler desto eher fraud z.B. 
+- ausblick mit was man noch machen kann
+
+
+## Analysis
+
+Are there Users, which answer often to the same users?
+
+These are the User with most comments to the same user. There are many Moderator bots in the list and also None.
+
