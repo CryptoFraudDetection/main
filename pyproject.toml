@@ -43,6 +43,8 @@ dependencies = [
     "notebook==7.3.1",
     "ipywidgets==8.1.5",
     "pyarrow==18.1.0",
+    "python-louvain==0.16",
+    "pygraphviz==1.14",
 ]
 
 [project.urls]
