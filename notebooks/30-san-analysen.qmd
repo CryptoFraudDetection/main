@@ -674,9 +674,12 @@ grouped_comments_df = comments_df.groupby(
     mean_score=("score", "mean"),
     **{col: (col, "sum") for col in agg_columns},
 )
+grouped_comments_df["fraud_ratio"] = (
+    grouped_comments_df["fraud"] / grouped_comments_df["weight"]
+)
 
 # Display top edges
-cols = {"weight", "score"} | set(patterns.keys())
+cols = {"weight", "score", "fraud_ratio"} | set(patterns.keys())
 for column in cols:
     print(f"Top edges (sorted by {column}):")
     display(grouped_comments_df.sort_values(column, ascending=False).head(5))
@@ -749,6 +752,9 @@ grouped_posts_df = prefix_column(
         )
     ),
     "post_",
+)
+grouped_posts_df["post_fraud_ratio"] = (
+    grouped_posts_df["post_fraud"] / grouped_posts_df["post_count"]
 )
 
 # Join the node data frames
