@@ -11,7 +11,7 @@ from CryptoFraudDetection.utils.enums import LoggerMode
 LOGGER = logger.Logger(name=__name__, level=LoggerMode.DEBUG, log_dir="../logs")
 
 def test_initialization():
-    """Test the initialization of the RedditScraper class"""
+    """Test the initialization of the Embedder class"""
     embedding_ = embedding.Embedder(logger_=LOGGER)
     assert embedding_ is not None
 
