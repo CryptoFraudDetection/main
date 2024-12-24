@@ -171,7 +171,7 @@ wandb
 cookies/
 
 # Ignore Jupyter notebooks
-*.ipynb
+# *.ipynb
 
 # PyCharm ignore
 .idea/
