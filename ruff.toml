@@ -1,3 +1,0 @@
-line-length = 120
-lint.select = ["ALL"]
-lint.ignore = ["D203", "D212", "S311", "EXE002"]

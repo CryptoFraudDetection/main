@@ -53,4 +53,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/CryptoFraudDetection/main"
-Issues = "https://github.com/CryptoFraudDetection/main/issues"
+Taskboard = "https://github.com/orgs/CryptoFraudDetection/projects/1"
+
+[tool.ruff]
+line-length = 79
+lint.select = ["ALL"]
+lint.exclude = ["D211", "D104"]
