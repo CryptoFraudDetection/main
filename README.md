@@ -33,9 +33,15 @@ Run the command below to create a virtual environment and install all required d
 make install
 ```
 
-### Notes:
+Notes:
 - Ensure you have **`make`** installed on your system for the setup command.  
 - For Windows users, you may need to install `make` using tools like **`choco`** or **`winget`**.  
+
+## MkDocs
+Run the command below to start the MkDocs server:  
+```bash
+make docs-serve
+```
 
 ## Structure
 
