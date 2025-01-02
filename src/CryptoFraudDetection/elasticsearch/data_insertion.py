@@ -1,10 +1,13 @@
-"""File: data_insertion.py.
+"""
+File: data_insertion.py.
 
 Description:
-- This file is used to insert data into Elasticsearch.
+    This file is used to insert data into Elasticsearch.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from elasticsearch.helpers import BulkIndexError, bulk
@@ -12,7 +15,9 @@ from elasticsearch.helpers import BulkIndexError, bulk
 from CryptoFraudDetection.elasticsearch.elastic_client import (
     get_elasticsearch_client,
 )
-from CryptoFraudDetection.utils.logger import Logger
+
+if TYPE_CHECKING:
+    from CryptoFraudDetection.utils.logger import Logger
 
 es = get_elasticsearch_client()
 
@@ -22,15 +27,16 @@ def insert_dataframe(
     index: str,
     df: pd.DataFrame,
 ) -> tuple[int, int | list[dict[str, list]]]:
-    """Insert a pandas DataFrame into Elasticsearch.
+    """
+    Insert a pandas DataFrame into Elasticsearch.
 
-    Args:
-    - logger (Logger): The logger to use for logging.
-    - index (str): The Elasticsearch index to insert the data into.
-    - df (pd.DataFrame): The DataFrame to insert.
+    Attributes:
+        logger (Logger): The logger object.
+        index (str): The name of the Elasticsearch index to insert into.
+        df (pd.DataFrame): The DataFrame to insert.
 
     Returns:
-    - dict: Elasticsearch bulk insert response.
+        response (tuple[int, int | list[dict[str, list]]]): The response from the Elasticsearch bulk insertion.
 
     """
     if "id" in df.columns:
@@ -68,15 +74,16 @@ def insert_dict(
     index: str,
     data_dict: dict[str, list[str]],
 ) -> tuple[int, int | list[dict[str, Any]]]:
-    """Insert a list of dictionaries into Elasticsearch.
+    """
+    Insert a list of dictionaries into Elasticsearch.
 
-    Args:
-    - logger (Logger): The logger to use for logging.
-    - index (str): The Elasticsearch index to insert the data into.
-    - data_dict (List[Dict[str, Any]]): The list of dictionaries to insert.
+    Attributes:
+        logger (Logger): The logger object.
+        index (str): The name of the Elasticsearch index to insert into.
+        data_dict (dict[str, list[str]]): The dictionary to insert.
 
     Returns:
-    - Tuple[int, int | List[Dict[str, Any]]]: Elasticsearch bulk insert response.
+        response (tuple[int, int | list[dict[str, Any]]): The response from the Elasticsearch bulk insertion.
 
     """
     data_frame = pd.DataFrame(data_dict)

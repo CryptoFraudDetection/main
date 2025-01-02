@@ -1,4 +1,5 @@
-"""File: comparitech.py.
+"""
+File: comparitech.py.
 
 Description:
     A web scraper for extracting cryptocurrency scam data from Comparitech's Crypto Scam List.
@@ -24,7 +25,8 @@ from CryptoFraudDetection.utils.logger import Logger
 
 
 class ComparitechScraper:
-    """A scraper for extracting cryptocurrency scam data from Comparitech.
+    """
+    A scraper for extracting cryptocurrency scam data from Comparitech.
 
     This class handles the web scraping of tabular data from Comparitech's Crypto Scam List,
     including pagination and data extraction with specific error handling for each operation.
@@ -49,7 +51,8 @@ class ComparitechScraper:
         page_load_timeout: int = 30,
         element_wait_timeout: int = 10,
     ) -> None:
-        """Initialize the ComparitechScraper.
+        """
+        Initialize the ComparitechScraper.
 
         Args:
             logger: Logger instance for tracking scraping progress and errors
@@ -68,7 +71,8 @@ class ComparitechScraper:
         headless: bool = True,
         test_run: bool = False,
     ) -> dict[str, list[str]]:
-        """Execute the scraping process and return collected data.
+        """
+        Execute the scraping process and return collected data.
 
         Args:
             headless: Whether to run browser in headless mode. Defaults to True.
@@ -121,7 +125,8 @@ class ComparitechScraper:
         driver: WebDriver,
         test_run: bool,
     ) -> dict[str, list[str]]:
-        """Perform the main scraping operation.
+        """
+        Perform the main scraping operation.
 
         Navigates through all pages of the table, collecting data from each page
         until no more pages are available.
@@ -190,7 +195,8 @@ class ComparitechScraper:
         return dict(results)
 
     def _extract_results(self, driver: WebDriver) -> dict[str, list[str]]:
-        """Extract data from the current page's table.
+        """
+        Extract data from the current page's table.
 
         Locates the table on the current page and extracts all cell values,
         organizing them by column headers.
@@ -256,7 +262,8 @@ class ComparitechScraper:
         return results
 
     def _click_next_page(self, driver: WebDriver) -> bool:
-        """Attempt to navigate to the next page of results.
+        """
+        Attempt to navigate to the next page of results.
 
         Uses JavaScript to click the next page button, as this is more reliable
         than selenium's click method for this particular interface.
@@ -273,7 +280,7 @@ class ComparitechScraper:
             # Attempt to click the next page button using JavaScript
             self.logger.debug("Attempting to click next page button")
             driver.execute_script(
-                "document.querySelector('button.next').click()"
+                "document.querySelector('button.next').click()",
             )
             return True
 

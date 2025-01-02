@@ -1,7 +1,8 @@
-"""File: elastic_client.py.
+"""
+File: elastic_client.py.
 
 Description:
-- This file contains the Elasticsearch client.
+    This file contains the Elasticsearch client.
 """
 
 import os
@@ -30,10 +31,11 @@ warnings.filterwarnings(
 
 
 def get_elasticsearch_client() -> Elasticsearch:
-    """Get the Elasticsearch client.
+    """
+    Get the Elasticsearch client.
 
     Returns:
-    - Elasticsearch: Elasticsearch client.
+        es (Elasticsearch): The Elasticsearch client.
 
     """
     if ELASTICSEARCH_API_KEY in ("changeme", None):

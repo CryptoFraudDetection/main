@@ -1,28 +1,36 @@
-"""File: google_results.py.
+"""
+File: google_results.py.
 
 Description:
-- This file contains the GoogleResultsScraper class, used to scrape search results from Google.
+    This file contains the GoogleResultsScraper class, used to scrape search results from Google.
 """
+
+from __future__ import annotations
 
 import hashlib
 import time
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
-from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
 
 from CryptoFraudDetection.scraper import utils
 from CryptoFraudDetection.utils.exceptions import (
     DetectedBotException,
     InvalidParameterException,
 )
-from CryptoFraudDetection.utils.logger import Logger
+
+if TYPE_CHECKING:
+    from selenium import webdriver
+    from selenium.webdriver.remote.webelement import WebElement
+
+    from CryptoFraudDetection.utils.logger import Logger
 
 
 class GoogleResultsScraper:
-    """A scraper class that interacts with Google Search to extract search result links,
+    """
+    A scraper class that interacts with Google Search to extract search result links,
     titles, and descriptions using Selenium.
 
     Attributes:
@@ -55,7 +63,8 @@ class GoogleResultsScraper:
         search_box_id: str = "APjFqb",
         next_button_id: str = "pnnext",
     ) -> None:
-        """Initializes the GoogleResultsScraper class.
+        """
+        Initialize the GoogleResultsScraper class.
 
         Args:
             logger (Logger): The logger instance to use for logging.
@@ -64,7 +73,6 @@ class GoogleResultsScraper:
             cookie_id (str): ID for the cookie acceptance button. Defaults to "L2AGLb".
             search_box_id (str): ID for the search input box. Defaults to "APjFqb".
             next_button_id (str): ID for the next page button. Defaults to "pnnext".
-            query (str): The search query to be performed on Google.
 
         """
         self.logger = logger
@@ -84,7 +92,8 @@ class GoogleResultsScraper:
         proxy_protocol: str | None = None,
         proxy_address: str | None = None,
     ) -> dict[str, list[str]]:
-        """Function to scrape Google search results for the given query.
+        """
+        Scrape Google search results for the given query.
 
         Args:
             query (str): The search query to be performed on Google.
@@ -111,7 +120,9 @@ class GoogleResultsScraper:
             self._perform_search(driver, self.query, delay_between_pages)
             time.sleep(delay_between_pages)
             results = self._scrape_multiple_pages(
-                driver, n_sites, delay_between_pages
+                driver,
+                n_sites,
+                delay_between_pages,
             )
         finally:
             driver.quit()
@@ -119,7 +130,8 @@ class GoogleResultsScraper:
         return results
 
     def _validate_input(self, n_sites: int) -> None:
-        """Validates the number of search result pages to scrape.
+        """
+        Validate the number of search result pages to scrape.
 
         Args:
             n_sites (int): The number of Google search result pages to scrape.
@@ -140,7 +152,8 @@ class GoogleResultsScraper:
         query: str,
         delay: float,
     ) -> None:
-        """Opens Google, accepts cookies, and submits the search query.
+        """
+        Open Google, accept cookies, and submit the search query.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.
@@ -154,7 +167,8 @@ class GoogleResultsScraper:
         self._submit_search_query(driver, query)
 
     def _accept_cookies(self, driver: webdriver.Firefox) -> None:
-        """Accepts Google's cookies if the prompt appears.
+        """
+        Accept Google's cookies if the prompt appears.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.
@@ -167,9 +181,12 @@ class GoogleResultsScraper:
             self.logger.warning("Cookie acceptance button not found.")
 
     def _submit_search_query(
-        self, driver: webdriver.Firefox, query: str
+        self,
+        driver: webdriver.Firefox,
+        query: str,
     ) -> None:
-        """Finds the search box, enters the query, and submits it.
+        """
+        Find the search box, enter the query, and submit it.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.
@@ -196,7 +213,8 @@ class GoogleResultsScraper:
         n_sites: int,
         delay: float,
     ) -> dict[str, list[str]]:
-        """Loops through multiple result pages and extracts search results.
+        """
+        Loops through multiple result pages and extracts search results.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.
@@ -227,7 +245,8 @@ class GoogleResultsScraper:
         return results
 
     def _get_result_boxes(self, driver: webdriver.Firefox) -> list[WebElement]:
-        """Fetches search result boxes from the current Google result page.
+        """
+        Fetch search result boxes from the current Google result page.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.
@@ -253,7 +272,8 @@ class GoogleResultsScraper:
         result_boxes: list[WebElement],
         results: dict[str, list[str]],
     ) -> None:
-        """Extracts links, titles, and descriptions from result boxes.
+        """
+        Extract links, titles, and descriptions from result boxes.
 
         Args:
             result_boxes (List[WebElement]): A list of WebElement objects
@@ -265,11 +285,11 @@ class GoogleResultsScraper:
         for box in result_boxes:
             try:
                 link = str(
-                    box.find_element(By.TAG_NAME, "a").get_attribute("href")
+                    box.find_element(By.TAG_NAME, "a").get_attribute("href"),
                 )
                 title = str(box.find_element(By.TAG_NAME, "h3").text)
                 desc = str(
-                    box.find_element(By.CLASS_NAME, self.desc_class).text
+                    box.find_element(By.CLASS_NAME, self.desc_class).text,
                 )
 
                 results["link"].append(link)
@@ -279,14 +299,15 @@ class GoogleResultsScraper:
 
                 id_pre_hash = link + title
                 results["id"].append(
-                    hashlib.md5(id_pre_hash.encode()).hexdigest()
+                    hashlib.md5(id_pre_hash.encode()).hexdigest(),
                 )
             except NoSuchElementException:
                 self.logger.debug("Missing elements in result box. Skipping")
                 continue
 
     def _click_next_page(self, driver: webdriver.Firefox) -> bool:
-        """Clicks the 'Next' button to go to the next result page.
+        """
+        Clicks the 'Next' button to go to the next result page.
 
         Args:
             driver (WebDriver): The Selenium WebDriver instance.

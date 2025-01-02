@@ -2,14 +2,6 @@
 
 Main repository for the project.
 
-## Instructions
-
-1. Clone the repo 📂
-2. Install the project using the `make dev-install` command 🛠️
-3. Copy the `.env-example` file to `.env` and fill in the necessary environment variables 🔑
-4. Load the environment variables using the `source .env` command 🔄
-5. You're ready to start working ☕️
-
 ## Installing `uv`
 
 `uv` is a universal runtime tool for running and managing Python applications. It ensures a streamlined setup and cross-platform compatibility.
@@ -42,6 +34,12 @@ Run the command below to start the MkDocs server:
 ```bash
 make docs-serve
 ```
+
+## Further instructions
+
+1. Copy the `.env-example` file to `.env` and fill in the necessary environment variables 🔑
+2. Load the environment variables using the `source .env` command 🔄
+3. You're ready to start working ☕️
 
 ## Structure
 

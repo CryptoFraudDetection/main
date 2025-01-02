@@ -1,18 +1,23 @@
 """
-Miscellaneous utility functions for the scraper module.
+File: utils.py.
+
+Description:
+    These functions are not specific to any particular part of the codebase, and are used in multiple places throughout the project.
 """
 
-import json
-import requests
+from __future__ import annotations
 
+import json
+
+import requests
 from selenium import webdriver
-from selenium.common.exceptions import WebDriverException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from selenium.webdriver.common.proxy import Proxy, ProxyType
 
 from CryptoFraudDetection.utils.exceptions import (
     ProxyIpEqualRealIp,
-    ProxyProtocolNotImplemented,
     ProxyNotWorking,
+    ProxyProtocolNotImplemented,
 )
 
 
@@ -31,6 +36,7 @@ def get_driver(
 
     Returns:
         WebDriver: A Selenium WebDriver object.
+
     """
     driver = None
 
@@ -44,7 +50,7 @@ def get_driver(
         proxy = Proxy(
             {
                 "proxyType": ProxyType.MANUAL,
-            }
+            },
         )
 
         match proxy_protocol:
@@ -58,8 +64,9 @@ def get_driver(
                 proxy.socks_proxy = proxy_address
                 proxy.socks_version = 5
             case _:
+                msg = f"Proxy protocol {proxy_protocol} is not implemented."
                 raise ProxyProtocolNotImplemented(
-                    f"Proxy protocol {proxy_protocol} is not implemented."
+                    msg,
                 )
 
         options.proxy = proxy
@@ -76,8 +83,9 @@ def get_driver(
             real_ip = requests.get("https://api.ipify.org", timeout=10).text
 
             if fetched_ip == real_ip:
+                msg = f"Proxy IP {fetched_ip} is equal to the real IP {real_ip}. The proxy is not working."
                 raise ProxyIpEqualRealIp(
-                    f"Proxy IP {fetched_ip} is equal to the real IP {real_ip}. The proxy is not working."
+                    msg,
                 )
         except (
             ProxyIpEqualRealIp,
@@ -85,11 +93,12 @@ def get_driver(
             NoSuchElementException,
         ) as e:
             driver.quit()
+            msg = f"Proxy {proxy_protocol}:{proxy_address} is not working."
             raise ProxyNotWorking(
-                f"Proxy {proxy_protocol}:{proxy_address} is not working."
+                msg,
             ) from e
 
-    driver = webdriver.Firefox(options=options) if not driver else driver
+    driver = driver if driver else webdriver.Firefox(options=options)
     driver.set_page_load_timeout(60)
 
     return driver

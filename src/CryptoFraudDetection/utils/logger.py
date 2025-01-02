@@ -1,15 +1,15 @@
 """
-File: logger.py
+File: logger.py.
 
 Description:
-- This file contains the Logger class used for logging messages to the console and a log file.
+    This file contains the Logger class used for logging messages to the console and a log file.
 """
 
 import logging
 import os
-from typing import Type
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+
 from CryptoFraudDetection.utils.enums import LoggerMode
 
 
@@ -25,10 +25,14 @@ class Logger:
         warning(message: str) -> None: Logs a warning message.
         error(message: str) -> None: Logs an error message.
         critical(message: str) -> None: Logs a critical message.
+
     """
 
     def __init__(
-        self, name: str, level: LoggerMode = LoggerMode.DEBUG, log_dir: str = "logs"
+        self,
+        name: str,
+        level: LoggerMode = LoggerMode.DEBUG,
+        log_dir: str = "logs",
     ) -> None:
         """
         Initializes the Logger instance with the specified name, log level, and log directory.
@@ -37,12 +41,13 @@ class Logger:
             name (str): The name of the logger, typically the name of the module or class.
             level (int, optional): The log level (default: LoggerMode.DEBUG).
             log_dir (str, optional): The directory where log files will be saved (default: "logs").
+
         """
         self.logger: logging.Logger = logging.getLogger(name)
         self.logger.setLevel(level.value)
 
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
         # Set up console handler
@@ -60,7 +65,9 @@ class Logger:
             # Set up rotating file handler to handle log rotation and avoid large log files
             time: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             file_handler: RotatingFileHandler = RotatingFileHandler(
-                f"{log_dir}/{time}_{name}.log", maxBytes=1024 * 1024 * 5, backupCount=5
+                f"{log_dir}/{time}_{name}.log",
+                maxBytes=1024 * 1024 * 5,
+                backupCount=5,
             )
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
@@ -71,6 +78,7 @@ class Logger:
 
         Args:
             message (str): The message to log.
+
         """
         self.logger.debug(message)
 
@@ -80,6 +88,7 @@ class Logger:
 
         Args:
             message (str): The message to log.
+
         """
         self.logger.info(message)
 
@@ -89,6 +98,7 @@ class Logger:
 
         Args:
             message (str): The message to log.
+
         """
         self.logger.warning(message)
 
@@ -98,6 +108,7 @@ class Logger:
 
         Args:
             message (str): The message to log.
+
         """
         self.logger.error(message)
 
@@ -107,12 +118,13 @@ class Logger:
 
         Args:
             message (str): The message to log.
+
         """
         self.logger.critical(message)
 
     def handle_exception(
         self,
-        exception_class: Type[Exception],
+        exception_class: type[Exception],
         message: str,
         logger_level: str = "error",
     ) -> None:
@@ -124,11 +136,12 @@ class Logger:
             message (str): The error message to log and raise.
             logger_level (str): The logging level to use ("error", "warning", "info").
                 Defaults to "error".
+
         """
         if logger_level == "error":
             self.logger.error(message)
             raise exception_class(message)
-        elif logger_level == "warning":
+        if logger_level == "warning":
             self.logger.warning(message)
         elif logger_level == "info":
             self.logger.info(message)

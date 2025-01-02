@@ -1,8 +1,8 @@
 """
-Miscellaneous utility functions.
+File: misc.py.
 
-These functions are not specific to any particular part of the codebase, and are
-used in multiple places throughout the project.
+Description:
+    These functions are not specific to any particular part of the codebase, and are used in multiple places throughout the project.
 """
 
 
@@ -12,5 +12,6 @@ def get_hello_world() -> str:
 
     Returns:
         str: A string containing the hello world message.
+
     """
     return "Hello, World!"
