@@ -1,0 +1,571 @@
+---
+jupyter: python3
+---
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:11.963037Z', iopub.status.busy: '2025-01-01T19:52:11.962665Z', iopub.status.idle: '2025-01-01T19:52:14.373251Z', shell.execute_reply: '2025-01-01T19:52:14.372996Z'}
+#| papermill: {duration: 2.413293, end_time: '2025-01-01T19:52:14.373705', exception: false, start_time: '2025-01-01T19:52:11.960412', status: completed}
+#| tags: []
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+import torch_geometric
+import cudf
+from torch import nn
+from torch_geometric.data import Data
+
+from CryptoFraudDetection.utils.enums import LoggerMode
+from CryptoFraudDetection.utils.logger import Logger
+
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
+logger_ = Logger(name="graph_attention_network", level=LoggerMode.INFO, log_dir="../logs")
+
+print(f"Device: {device}")
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:14.377494Z', iopub.status.busy: '2025-01-01T19:52:14.377334Z', iopub.status.idle: '2025-01-01T19:52:24.835838Z', shell.execute_reply: '2025-01-01T19:52:24.835532Z'}
+#| papermill: {duration: 10.460937, end_time: '2025-01-01T19:52:24.836712', exception: false, start_time: '2025-01-01T19:52:14.375775', status: completed}
+#| tags: []
+embedding_exists = None
+df_reddit = None
+
+try:
+    df_reddit = pd.read_parquet(
+        "../data/processed/reddit_posts_embedded.parquet",
+        columns=[
+            "id",
+            "parent_id",
+            "author",
+            "score",
+            "search_query",
+            "subreddit",
+            "test",
+            "fraud",
+            "embedding",
+        ],
+    )
+    embedding_exists = True
+except FileNotFoundError:
+    raise
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:24.847148Z', iopub.status.busy: '2025-01-01T19:52:24.846997Z', iopub.status.idle: '2025-01-01T19:52:24.853704Z', shell.execute_reply: '2025-01-01T19:52:24.853495Z'}
+#| papermill: {duration: 0.016047, end_time: '2025-01-01T19:52:24.854198', exception: false, start_time: '2025-01-01T19:52:24.838151', status: completed}
+#| tags: []
+df_reddit.head(1)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:24.856770Z', iopub.status.busy: '2025-01-01T19:52:24.856628Z', iopub.status.idle: '2025-01-01T19:52:24.868276Z', shell.execute_reply: '2025-01-01T19:52:24.868073Z'}
+#| papermill: {duration: 0.013313, end_time: '2025-01-01T19:52:24.868613', exception: false, start_time: '2025-01-01T19:52:24.855300', status: completed}
+#| tags: []
+score_min = df_reddit["score"].min()
+score_max = df_reddit["score"].max()
+df_reddit["normalized_score"] = (df_reddit["score"] - score_min) / (score_max - score_min)
+df_reddit["normalized_score"].describe()
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:24.871062Z', iopub.status.busy: '2025-01-01T19:52:24.870983Z', iopub.status.idle: '2025-01-01T19:52:28.260923Z', shell.execute_reply: '2025-01-01T19:52:28.260618Z'}
+#| papermill: {duration: 3.391679, end_time: '2025-01-01T19:52:28.261377', exception: false, start_time: '2025-01-01T19:52:24.869698', status: completed}
+#| tags: []
+# Add features column
+df_reddit["features"] = df_reddit.apply(
+    lambda row: np.concatenate([np.array([row["normalized_score"]]), np.array(row["embedding"])], axis=0),
+    axis=1,
+)
+df_reddit = df_reddit.drop(columns=["embedding", "normalized_score"])
+
+df_reddit.head(1)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.271806Z', iopub.status.busy: '2025-01-01T19:52:28.271720Z', iopub.status.idle: '2025-01-01T19:52:28.321922Z', shell.execute_reply: '2025-01-01T19:52:28.321524Z'}
+#| papermill: {duration: 0.05991, end_time: '2025-01-01T19:52:28.322819', exception: false, start_time: '2025-01-01T19:52:28.262909', status: completed}
+#| tags: []
+df_train = df_reddit[~df_reddit["test"]]
+df_test = df_reddit[df_reddit["test"]]
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.325746Z', iopub.status.busy: '2025-01-01T19:52:28.325664Z', iopub.status.idle: '2025-01-01T19:52:28.327345Z', shell.execute_reply: '2025-01-01T19:52:28.327141Z'}
+#| papermill: {duration: 0.003458, end_time: '2025-01-01T19:52:28.327673', exception: false, start_time: '2025-01-01T19:52:28.324215', status: completed}
+#| tags: []
+# This approach has been scraped, since it creates hundreds of millions of edges and fills up my whole memory
+# The idea was to create edges between all nodes that share the same author, subreddit or search query
+
+# -----------------------------------------------------------------------------------------------------------
+
+# def createedges_from_group(df, group_feature):
+#     """Create edges by connecting all nodes within the same group without duplicates."""
+#     edges = []
+#     unique_groups = sorted(df[group_feature].unique())  # Sort groups for ordered processing
+#
+#     for group in tqdm(unique_groups, desc=f"Processing {group_feature}"):
+#         # Filter IDs for the current group
+#         group_ids = sorted(df[df[group_feature] == group]["id"].to_numpy())  # Sort node IDs
+#
+#         # Process connections for each node
+#         while group_ids:  # Keep processing until all nodes in this group are handled
+#             current_node = group_ids.pop(0)  # Take the first node and "pop" it from the list
+#             for target_node in group_ids:  # Connect it with all remaining nodes
+#                 edges.append((current_node, target_node))
+#     return edges
+#
+#
+# # Same-author, same-subreddit, same-search_query edges (bidirectional)
+# edges_same_author = createedges_from_group(df_reddit, "author")
+# edges_same_subreddit = createedges_from_group(df_reddit, "subreddit")
+# edges_same_query = createedges_from_group(df_reddit, "search_query")
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.330184Z', iopub.status.busy: '2025-01-01T19:52:28.330113Z', iopub.status.idle: '2025-01-01T19:52:28.333438Z', shell.execute_reply: '2025-01-01T19:52:28.333215Z'}
+#| papermill: {duration: 0.004976, end_time: '2025-01-01T19:52:28.333768', exception: false, start_time: '2025-01-01T19:52:28.328792', status: completed}
+#| tags: []
+class GAT(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers) -> None:
+        super().__init__()
+
+        # GAT layers
+        self.gat = torch_geometric.nn.models.GAT(
+            in_channels=in_channels,
+            hidden_channels=hidden_channels,
+            out_channels=out_channels,
+            num_layers=num_layers,
+            v2=True,
+        )
+
+    def forward(self, x, edge_index):
+        # Apply GAT layers
+        x = self.gat(x, edge_index)
+
+        # Return the output with a sigmoid activation
+        return torch.sigmoid(x)
+
+
+class RedditDataset(Data):
+    def __init__(self, data, device) -> None:
+        super().__init__()
+        self.data = data
+        self.x = None
+        self.y = None
+        self.edge_index = None
+        self.device = device
+
+    def process(self) -> None:
+        # reset index
+        self.data = self.data.reset_index(drop=True)
+
+        # create mapping
+        id_mapping = dict(zip(self.data["id"].values, self.data.index.values))
+
+        # replace hashes with indices
+        self.data["id"] = self.data["id"].map(id_mapping).astype(int)
+        self.data["parent_id"] = self.data["parent_id"].map(id_mapping).fillna(-1).astype(int)
+
+        # create edges
+        edges = pd.concat([self.data["id"], self.data["parent_id"]], axis=1)
+        edges = edges[edges["parent_id"] != -1]
+        edges = edges.to_numpy()
+
+        # prepare data
+        self.x = torch.tensor(np.array(self.data["features"].to_list()), dtype=torch.float).to(self.device)
+        self.y = torch.tensor(self.data["fraud"].to_list(), dtype=torch.float).to(self.device)
+        self.edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous().to(self.device)
+
+    def __len__(self) -> int:
+        return self.x.shape[0]
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.336334Z', iopub.status.busy: '2025-01-01T19:52:28.336252Z', iopub.status.idle: '2025-01-01T19:52:28.337843Z', shell.execute_reply: '2025-01-01T19:52:28.337647Z'}
+#| papermill: {duration: 0.003386, end_time: '2025-01-01T19:52:28.338279', exception: false, start_time: '2025-01-01T19:52:28.334893', status: completed}
+#| tags: []
+# def balance_labels_in_dataset(df, logger_):
+#     """Balance labels in the dataset by collecting enough non-fraud comments."""
+#     n_datapoints_fraud = df[df["fraud"] == 1].shape[0]
+#     all_post_ids = get_all_post_ids(df)
+#     comment_ids_non_fraud = set()
+#     
+#     # Iterate over each post and collect children for non-fraud nodes
+#     for post_id in all_post_ids:
+#         nodes_to_visit = [post_id]
+#         visited = set()
+#         
+#         # Traverse nodes iteratively to collect all children
+#         while nodes_to_visit:
+#             current_node = nodes_to_visit.pop()
+#             if current_node not in visited:
+#                 visited.add(current_node)
+#                 comment_ids_non_fraud.add(current_node)
+#                 
+#                 # Add children of the current node to the visit queue
+#                 children = df[df["parent_id"] == current_node]["id"].to_list()
+#                 nodes_to_visit.extend(children)
+# 
+#         # Stop early once enough non-fraud datapoints are collected
+#         if len(comment_ids_non_fraud) >= n_datapoints_fraud:
+#             break
+# 
+#     logger_.debug(
+#         f"Balancing labels: {n_datapoints_fraud} fraud datapoints, {len(comment_ids_non_fraud)} non-fraud datapoints"
+#     )
+# 
+#     # Concatenate fraud datapoints and balanced non-fraud datapoints
+#     df_balanced = pd.concat(
+#         [
+#             df[df["fraud"] == 1],
+#             df[df["id"].isin(comment_ids_non_fraud)],
+#         ]
+#     )
+#     
+#     return df_balanced
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.341766Z', iopub.status.busy: '2025-01-01T19:52:28.341561Z', iopub.status.idle: '2025-01-01T19:52:28.348223Z', shell.execute_reply: '2025-01-01T19:52:28.347986Z'}
+#| papermill: {duration: 0.008914, end_time: '2025-01-01T19:52:28.348580', exception: false, start_time: '2025-01-01T19:52:28.339666', status: completed}
+#| tags: []
+def get_all_post_ids(df, device):
+    """Get all root post IDs (those with no parent)."""
+    if device == torch.device("cuda"):
+        return df[df["parent_id"].isna()]["id"].sample(frac=1, random_state=42).to_arrow().to_pylist()
+    return df[df["parent_id"].isna()]["id"].sample(frac=1, random_state=42).to_list()
+
+def balance_labels_in_dataset(df, device, logger_):
+    """Balance labels in the dataset by collecting enough non-fraud comments."""
+    if device == torch.device("cuda"):
+        logger_.debug("Converting DataFrame to cuDF")
+        df = cudf.DataFrame.from_pandas(df)
+
+    n_datapoints_fraud = df[df["fraud"] == 1].shape[0]
+    all_post_ids = get_all_post_ids(df, device)
+    comment_ids_non_fraud = set()
+    
+    # Iterate over each post and collect children for non-fraud nodes
+    logger_.debug("Balancing labels: Collecting non-fraud comments")
+    for post_id in all_post_ids:
+        nodes_to_visit = [post_id]
+        visited = set()
+        
+        # Traverse nodes iteratively to collect all children
+        while nodes_to_visit:
+            current_node = nodes_to_visit.pop()
+            if current_node not in visited:
+                visited.add(current_node)
+                comment_ids_non_fraud.add(current_node)
+                
+                # Add children of the current node to the visit queue
+                if device == torch.device("cuda"):
+                    children = df[df["parent_id"] == current_node]["id"].to_arrow().to_pylist()
+                else:
+                    children = df[df["parent_id"] == current_node]["id"].to_list()
+                nodes_to_visit.extend(children)
+
+        # Stop early once enough non-fraud datapoints are collected
+        if len(comment_ids_non_fraud) >= n_datapoints_fraud:
+            break
+
+    logger_.debug(
+        f"Balanced labels: {n_datapoints_fraud} fraud datapoints, {len(comment_ids_non_fraud)} non-fraud datapoints"
+    )
+
+    if device == torch.device("cuda"):
+        logger_.debug("Converting cuDF back to DataFrame")
+        df = df.to_pandas()
+
+    # Concatenate fraud datapoints and balanced non-fraud datapoints
+    df_balanced = pd.concat(
+        [
+            df[df["fraud"] == 1],
+            df[df["id"].isin(comment_ids_non_fraud)],
+        ]
+    )
+
+    # Clear CUDA memory
+    del df
+
+    logger_.debug(f"Balancing done.")
+    
+    return df_balanced
+
+
+def prepare_datasets(df, coin, device, balance_labels, logger_):
+    logger_.debug(f"Preparing datasets for coin: {coin}")
+    fit_data = df[df["search_query"] != coin]
+    val_data = df[df["search_query"] == coin]
+
+    if balance_labels:
+        logger_.debug("Balancing labels in the fitting dataset")
+        fit_data = balance_labels_in_dataset(fit_data, device, logger_)
+
+    fit_dataset = RedditDataset(fit_data, device)
+    val_dataset = RedditDataset(val_data, device)
+
+    fit_dataset.process()
+    val_dataset.process()
+
+    return fit_dataset, val_dataset
+
+def prepare_model(device, in_channels, hidden_channels, out_channels, num_layers, lr, logger_):
+    """Initialize the GAT model, loss function, and optimizer."""
+    logger_.debug(
+        "Initializing model with parameters: "
+        f"in_channels={in_channels}, hidden_channels={hidden_channels}, "
+        f"out_channels={out_channels}, num_layers={num_layers}, lr={lr}"
+    )
+    model = GAT(
+        in_channels=in_channels,
+        hidden_channels=hidden_channels,
+        out_channels=out_channels,
+        num_layers=num_layers,
+    ).to(device)
+
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    return model, criterion, optimizer
+
+
+def train_model(model, dataset, criterion, optimizer, logger_):
+    """Train the model for one iteration."""
+    model.train()
+    optimizer.zero_grad()
+    out = model(dataset.x, dataset.edge_index).squeeze()
+    loss = criterion(out, dataset.y)
+    loss.backward()
+    optimizer.step()
+
+    logger_.debug(f"Training loss: {loss.item()}")
+    return loss
+
+
+def validate_model(model, dataset, criterion, logger_):
+    """Evaluate the model on the validation dataset."""
+    model.eval()
+    all_preds = []
+    all_targets = []
+
+    with torch.no_grad():
+        out = model(dataset.x, dataset.edge_index).squeeze()
+        val_loss = criterion(out, dataset.y)
+        all_preds.append(out)
+        all_targets.append(dataset.y)
+
+    all_preds = torch.cat(all_preds).cpu().numpy()
+    all_targets = torch.cat(all_targets).cpu().numpy()
+
+    accuracy = ((all_preds >= 0.5) * 1 == all_targets).mean()
+
+    logger_.debug(f"Validation loss: {val_loss.item()}, Validation accuracy: {accuracy}")
+    return val_loss, accuracy
+
+
+def train_for_coin(
+    coin,
+    df,
+    device,
+    training_loops,
+    in_channels,
+    hidden_channels,
+    out_channels,
+    num_layers,
+    lr,
+    balance_labels,
+    logger_,
+):
+    """Train and validate the model, leaving one coin out."""
+    logger_.debug(f"Training model - leaving out {coin}")
+
+    # Prepare data
+    fit_dataset, val_dataset = prepare_datasets(df, coin, device, balance_labels, logger_)
+
+    # Prepare model
+    model, criterion, optimizer = prepare_model(
+        device,
+        in_channels,
+        hidden_channels,
+        out_channels,
+        num_layers,
+        lr,
+        logger_,
+    )
+
+    for i in range(training_loops):
+        logger_.debug(f"Training loop {i + 1}/{training_loops}")
+
+        # Training
+        train_loss = train_model(model, fit_dataset, criterion, optimizer, logger_)
+
+        # Validation
+        val_loss, accuracy = validate_model(model, val_dataset, criterion, logger_)
+        logger_.debug(
+            f"End of loop {i + 1}: Training loss: {train_loss.item()}, Validation loss: {val_loss.item()}, Validation accuracy: {accuracy}"
+        )
+
+    return accuracy
+
+
+def main(
+    df,
+    device,
+    training_loops,
+    in_channels,
+    hidden_channels,
+    out_channels,
+    num_layers,
+    lr,
+    balance_labels,
+    logger_,
+):
+    """
+    Train a GAT model for each coin in the dataset.
+
+    Parameters
+    ----------
+        df (DataFrame): Input dataset.
+        device (torch.device): Device for training.
+        training_loops (int): Number of training loops.
+        in_channels (int): Input channels for the GAT model.
+        hidden_channels (int): Number of hidden channels in the GAT model.
+        out_channels (int): Number of output channels for the GAT model.
+        num_layers (int): Number of layers in the GAT model.
+        lr (float): Learning rate for the optimizer.
+        balance_labels (bool): Whether to balance the labels in the fitting dataset.
+        logger_ (logging.Logger): Logger object for logging.
+
+    Returns
+    -------
+        dict: A dictionary where keys are coin names and values are validation accuracies.
+
+    """
+    accuracies = {}
+    coins = df["search_query"].unique()
+
+    for coin in coins:
+        accuracy = train_for_coin(
+            coin,
+            df,
+            device,
+            training_loops,
+            in_channels,
+            hidden_channels,
+            out_channels,
+            num_layers,
+            lr,
+            balance_labels,
+            logger_,
+        )
+        accuracies[coin] = accuracy.item()
+
+    return accuracies
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:28.352478Z', iopub.status.busy: '2025-01-01T19:52:28.352149Z', iopub.status.idle: '2025-01-01T19:52:34.292679Z', shell.execute_reply: '2025-01-01T19:52:34.292456Z'}
+#| papermill: {duration: 5.943044, end_time: '2025-01-01T19:52:34.293100', exception: false, start_time: '2025-01-01T19:52:28.350056', status: completed}
+#| tags: []
+# Test if works
+_ = main(
+    df_train,
+    device,
+    training_loops=10,
+    in_channels=769,
+    hidden_channels=4,
+    out_channels=1,
+    num_layers=2,
+    lr=0.0005,
+    balance_labels=False,
+    logger_=logger_,
+)
+torch.cuda.empty_cache()
+print("Success")
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:34.303718Z', iopub.status.busy: '2025-01-01T19:52:34.303545Z', iopub.status.idle: '2025-01-01T19:52:34.306799Z', shell.execute_reply: '2025-01-01T19:52:34.306594Z'}
+#| papermill: {duration: 0.012502, end_time: '2025-01-01T19:52:34.307137', exception: false, start_time: '2025-01-01T19:52:34.294635', status: completed}
+#| tags: []
+def initialize_json_file(file_path):
+    """Initialize the JSON file if it does not exist."""
+    if not file_path.exists():
+        with file_path.open("w") as f:
+            json.dump([], f)  # Start with an empty list
+
+
+def append_to_json(file_path, data):
+    """Append a new entry to the JSON file."""
+    with file_path.open("r+") as f:
+        existing_data = json.load(f)  # Load existing data
+        existing_data.append(data)  # Add the new entry
+        f.seek(0)  # Reset cursor to the beginning of the file
+        json.dump(existing_data, f, indent=4)  # Write updated data back to the file
+
+
+def perform_hyperparameter_search(searches, file_path, logger_, df_train, device, main):
+    """Perform random hyperparameter searches and log results."""
+    rng = np.random.default_rng()
+
+    for i in range(searches):
+        try:
+            # Randomly sample hyperparameters
+            params = {
+                "training_loops": rng.choice([4000, 8000]).item(),
+                "hidden_channels": rng.choice([8, 16, 32, 64, 128, 256]).item(),
+                "num_layers": rng.integers(1, 10).item(),
+                "lr": rng.choice([0.0001, 0.0005, 0.001, 0.005]).item(),
+                "balance_labels": True,
+            }
+            logger_.info(f"Starting search {i + 1}/{searches}")
+            logger_.info(f"Hyperparameters: {params}")
+
+            # Run the main function to get accuracies
+            accuracies = main(
+                df_train,
+                device,
+                training_loops=params["training_loops"],
+                in_channels=769,
+                hidden_channels=params["hidden_channels"],
+                out_channels=1,
+                num_layers=params["num_layers"],
+                lr=params["lr"],
+                balance_labels=params["balance_labels"],
+                logger_=logger_,
+            )
+
+            # Combine parameters and accuracies
+            result = {**params, "accuracies": accuracies}
+
+            # Append result to the JSON file
+            append_to_json(file_path, result)
+
+        except torch.cuda.OutOfMemoryError as e:  # noqa: PERF203
+            logger_.error(f"Out of memory error: {e}, skipping search {i + 1}/{searches}")
+        finally:
+            torch.cuda.empty_cache()
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2025-01-01T19:52:34.309879Z', iopub.status.busy: '2025-01-01T19:52:34.309800Z'}
+#| papermill: {duration: null, end_time: null, exception: false, start_time: '2025-01-01T19:52:34.308376', status: running}
+#| tags: []
+# Main execution
+file_path = Path("../reports/hyperparameter_search_gat_v2.json")
+initialize_json_file(file_path)
+
+perform_hyperparameter_search(
+    searches=1000,
+    file_path=file_path,
+    logger_=logger_,
+    df_train=df_train,
+    device=device,
+    main=main,
+)
+```
+

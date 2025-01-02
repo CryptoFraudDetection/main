@@ -171,7 +171,7 @@ wandb
 cookies/
 
 # Ignore Jupyter notebooks
-# *.ipynb
+*.ipynb
 
 # PyCharm ignore
 .idea/
@@ -181,6 +181,3 @@ data/processed/*.csv
 data/processed/*.parquet
 data/reddit/*.json
 data/reddit/*json.lock
-
-# UV 
-uv.lock
