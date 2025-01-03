@@ -118,7 +118,7 @@ def multiple_coins(
     return results
 
 
-def cut(
+def cut_generator(
     x: torch.Tensor,
     y: torch.Tensor,
     points_in_time: list[list[int]],
@@ -154,3 +154,70 @@ def cut(
             x_cut = x[i, :, :cutoff]
             y_cut = y[i, :cutoff]
             yield x_cut, y_cut
+
+
+def cut(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    points_in_time: list[list[int]],
+    logger_: logger.Logger,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Create tensors for all cutoffs based on points in time.
+
+    Args:
+        x: 3D tensor [coins, features, time].
+        y: 2D tensor [coins, time].
+        points_in_time: List of lists, where each sublist contains cutoff
+            points for slicing a coin's data.
+        logger_: Logger instance for error reporting.
+
+    Returns:
+        A tuple `(x_cuts, y_cuts)`:
+        - `x_cuts`: 4D tensor [coins, features, max_time, cutoff points].
+        - `y_cuts`: 3D tensor [coins, max_time, cutoff points].
+
+    Raises:
+        SystemExit: If any cutoff point is invalid (e.g., out of bounds for
+        the tensor's dimensions), an error is logged, and processing stops.
+
+    """
+    # Calculate the global maximum cutoff across all coins
+    max_cutoff = max(max(indices) for indices in points_in_time)
+
+    x_cuts = []
+    y_cuts = []
+
+    for i, time_indices in enumerate(points_in_time):
+        x_slices = []
+        y_slices = []
+
+        for cutoff in time_indices:
+            if cutoff <= 0 or cutoff > x.size(2):  # Validate cutoff range
+                logger_.error(
+                    f"Invalid cutoff {cutoff} for coin {i} with time dimension {x.size(2)}.",
+                )
+            # Slice the tensors up to the cutoff point
+            x_slice = torch.zeros(
+                x.size(1), max_cutoff
+            )  # Pre-allocate with zeros
+            y_slice = torch.zeros(max_cutoff)  # Pre-allocate with zeros
+
+            x_slice[:, :cutoff] = x[i, :, :cutoff]  # Copy valid data
+            y_slice[:cutoff] = y[i, :cutoff]  # Copy valid data
+
+            x_slices.append(x_slice.unsqueeze(-1))  # Add cutoff as new dim
+            y_slices.append(y_slice.unsqueeze(-1))  # Add cutoff as new dim
+
+        # Concatenate slices along the new dimension (cutoff points)
+        x_cuts.append(torch.cat(x_slices, dim=-1))
+        y_cuts.append(torch.cat(y_slices, dim=-1))
+
+    # Stack along the coin dimension
+    x_cuts = torch.stack(
+        x_cuts, dim=0
+    )  # Shape: [coins, features, max_time, cutoff points]
+    y_cuts = torch.stack(
+        y_cuts, dim=0
+    )  # Shape: [coins, max_time, cutoff points]
+
+    return x_cuts, y_cuts
