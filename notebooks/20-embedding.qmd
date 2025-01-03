@@ -15,10 +15,12 @@ jupyter: python3
 ---
 
 ```{python}
+from pathlib import Path
 from typing import Any
 
 from elasticsearch import helpers
 from elasticsearch.exceptions import ConnectionTimeout
+import pandas as pd
 from tqdm import tqdm
 
 from CryptoFraudDetection.utils import embedding
@@ -26,9 +28,29 @@ from CryptoFraudDetection.utils import enums
 from CryptoFraudDetection.utils import logger
 from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
 
+
 LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.INFO, log_dir="../logs")
 es = get_elasticsearch_client()
 ```
+
+Embed Reddit data
+
+```{python}
+reddit_parquet_path = "../data/processed/reddit.parquet"
+embedded_reddit_parquet_path = "../data/processed/reddit_embedded.parquet"
+
+if not Path(embedded_reddit_parquet_path).exists():
+    df = pd.read_parquet(reddit_parquet_path)
+    text = df["body"].tolist()
+
+    embedded_text = embedding.embed(logger_=LOGGER, text=text)
+
+    df["embedded_text"] = embedded_text
+    df.to_parquet(embedded_reddit_parquet_path)
+```
+
+
+Embed Twitter data
 
 ```{python}
 def scroll_documents(
@@ -188,4 +210,3 @@ index_name = "reddit_posts_unwrapped_embedding"
 # reindex_data(orig_index_name, index_name)
 process_and_update_documents(index=index_name)
 ```
-
