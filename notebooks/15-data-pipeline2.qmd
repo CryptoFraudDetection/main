@@ -1,0 +1,75 @@
+---
+title: Crypto Fraud Detection - Data Pipeline Notebook
+author: Gabriel Torres Gamez, Florian Baumgartner, Can-Elian Barth, Aaron Brülisauer
+execute-dir: file
+output-dir: output
+toc: true
+number-sections: true
+number-depth: 2
+papersize: a4paper
+code-line-numbers: true
+code-fold: true
+code-overflow: wrap
+self-contained: true
+jupyter: python3
+---
+
+```{python}
+import pandas as pd
+
+from CryptoFraudDetection.utils import data_pipeline, enums, logger
+
+LOGGER = logger.Logger(
+    name=__name__,
+    level=enums.LoggerMode.INFO,
+    log_dir="../logs",
+)
+```
+
+```{python}
+coin_info, price_df, twitter_df, reddit_df = data_pipeline.read_data(LOGGER)
+data_pipeline.validate_price_data(price_df, LOGGER)
+```
+
+```{python}
+coin_symbol_map = {coin["name"]: coin["symbol"] for coin in coin_info}
+datetime_index = pd.DatetimeIndex(sorted(price_df["datetime"].unique()))
+```
+
+```{python}
+grouped_twitter_df = data_pipeline.group_scocial_media_df(
+    twitter_df,
+    datetime_index,
+    coin_symbol_map,
+    LOGGER,
+)
+grouped_reddit_df = data_pipeline.group_scocial_media_df(
+    reddit_df,
+    datetime_index,
+    coin_symbol_map,
+    LOGGER,
+)
+```
+
+Are all Twitter and Reddit dates in price dates?
+
+```{python}
+price_dates = set(price_df["datetime"].unique())
+twitter_dates = set(grouped_twitter_df["datetime"].unique())
+reddit_dates = set(grouped_reddit_df["datetime"].unique())
+
+(twitter_dates | reddit_dates) - price_dates == set()
+```
+
+```{python}
+merged_df = data_pipeline.merge_dfs(
+    price_df,
+    grouped_twitter_df,
+    grouped_reddit_df,
+)
+```
+
+```{python}
+merged_df
+```
+
