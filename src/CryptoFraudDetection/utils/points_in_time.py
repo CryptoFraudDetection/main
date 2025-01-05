@@ -14,7 +14,6 @@ from CryptoFraudDetection.utils import logger
 
 def single_coin(
     x: torch.Tensor,
-    y: torch.Tensor,
     n: int,
     n_splits: int,
     logger_: logger.Logger,
