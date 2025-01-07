@@ -33,9 +33,9 @@ class CryptoData:
         coin_info_file_path: Path = Path("raw/coins.json"),
         price_dir_path: Path = Path("raw/coin_price_data"),
         twitter_parquet_path: Path = Path(
-            "processed/x_posts_embeddings.parquet",
+            "processed/x_sentiment.parquet",
         ),
-        reddit_parquet_path: Path = Path("processed/reddit_embedded.parquet"),
+        reddit_parquet_path: Path = Path("processed/reddit_sentiment.parquet"),
     ):
         self._logger = logger_
         self._data_dir = data_dir
@@ -151,7 +151,8 @@ class CryptoData:
         n_comments_column = "n_comments"
         embedding_column = "embedding"
         coin_column = "coin"
-        
+        sentiment_column = "sentiment_score"
+
         social_media_df = social_media_df.sort_values(date_column)
 
         # replace coin names with mapping
@@ -184,6 +185,10 @@ class CryptoData:
                     count=pd.NamedAgg(
                         column=embedding_column,
                         aggfunc="count",
+                    ),
+                    sentiment=pd.NamedAgg(
+                        column=sentiment_column,
+                        aggfunc="mean",
                     ),
                 )
                 .reset_index()
