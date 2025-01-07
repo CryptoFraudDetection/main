@@ -16,14 +16,21 @@ jupyter: python3
 
 ```{python}
 from pathlib import Path
+from typing import Any
 
+from elasticsearch import helpers
+from elasticsearch.exceptions import ConnectionTimeout
 import pandas as pd
+from tqdm import tqdm
 
 from CryptoFraudDetection.utils import embedding
 from CryptoFraudDetection.utils import enums
 from CryptoFraudDetection.utils import logger
+from CryptoFraudDetection.elasticsearch.elastic_client import get_elasticsearch_client
+
 
 LOGGER = logger.Logger(name=__name__, level=enums.LoggerMode.INFO, log_dir="../logs")
+es = get_elasticsearch_client()
 ```
 
 Embed Reddit data
@@ -42,3 +49,164 @@ if not Path(embedded_reddit_parquet_path).exists():
     df.to_parquet(embedded_reddit_parquet_path)
 ```
 
+
+Embed Twitter data
+
+```{python}
+def scroll_documents(
+    index: str, query: dict[str, Any], scroll: str = "1h", batch_size: int = 100
+):
+    """
+    Generator function to scroll through all documents in an Elasticsearch index.
+
+    Args:
+        index (str): Elasticsearch index name.
+        query (Dict[str, Any]): Query to filter documents.
+        scroll (str): Scroll context lifetime.
+        batch_size (int): Number of documents per batch.
+
+    Yields:
+        List[Dict[str, Any]]: A batch of documents.
+    """
+    response = es.search(index=index, body=query, scroll=scroll, size=batch_size)
+    sid = response["_scroll_id"]
+    scroll_size = len(response["hits"]["hits"])
+
+    while scroll_size > 0:
+        yield response["hits"]["hits"]
+        response = es.scroll(scroll_id=sid, scroll=scroll)
+        sid = response["_scroll_id"]
+        scroll_size = len(response["hits"]["hits"])
+
+    es.clear_scroll(scroll_id=sid)
+
+
+
+def prepare_bulk_updates(docs: list[dict[str, Any]], embeddings: list[Any], index: str):
+    """
+    Prepare bulk update actions for Elasticsearch.
+
+    Args:
+        docs (List[Dict[str, Any]]): Original documents.
+        embeddings (List[Any]): Corresponding embeddings.
+        index (str): Elasticsearch index name.
+
+    Returns:
+        List[Dict[str, Any]]: Bulk update actions.
+    """
+    actions = []
+    for doc, embedding_vector in zip(docs, embeddings):
+        action = {
+            "_op_type": "update",
+            "_index": index,
+            "_id": doc["_id"],
+            "doc": {"embedding": embedding_vector},
+        }
+        actions.append(action)
+    return actions
+
+
+def process_and_update_documents(index: str):
+    """
+    Process documents by computing embeddings and updating them in Elasticsearch.
+
+    Args:
+        index (str): Elasticsearch index name.
+    """
+    es = get_elasticsearch_client()  # Centralized client
+    # Query to fetch documents without the "embedding" field
+    query = {
+        "query": {
+            "bool": {
+                "must_not": {
+                    "exists": {
+                        "field": "embedding"
+                    }
+                }
+            }
+        }
+    }
+    batch_size = 1000  # Adjust batch size based on memory constraints
+    total_docs = es.count(index=index, body=query)["count"]  # Total documents to process
+
+    try:
+        for docs_batch in tqdm(
+            scroll_documents(index=index, query=query, batch_size=batch_size),
+            total=(total_docs // batch_size) + 1,
+            desc="Processing batches",
+        ):
+            try:
+                # Extract texts for embedding
+                texts = [doc["_source"]["body"] for doc in docs_batch]
+
+                # Compute embeddings
+                embeddings = embedding.embed(LOGGER, texts)
+
+                # Prepare bulk update actions
+                actions = prepare_bulk_updates(docs_batch, embeddings, index)
+
+                # Execute bulk update
+                helpers.bulk(es, actions)
+                LOGGER.info(f"Updated {len(actions)} documents with embeddings.")
+            except ConnectionTimeout:
+                LOGGER.error("Connection timed out. Retrying...")
+                continue
+    except Exception as e:
+        LOGGER.error(f"An error occurred: {str(e)}")
+
+
+
+def create_index(index_name: str, source_index: str):
+    """
+    Create a new index with the same mapping as the source index.
+
+    Args:
+        index_name (str): The name of the new index.
+        source_index (str): The name of the source index.
+    """
+    # Get the mappings and settings from the source index
+    mapping = es.indices.get_mapping(index=source_index)
+    settings = es.indices.get_settings(index=source_index)
+
+    # Filter out invalid settings
+    filtered_settings = {
+        key: value
+        for key, value in settings[source_index]["settings"]["index"].items()
+        if not key.startswith("creation_date")
+        and not key.startswith("uuid")
+        and not key.startswith("version")
+        and not key.startswith("provided_name")
+    }
+
+    # Create the new index with filtered settings and mappings
+    es.indices.create(
+        index=index_name,
+        body={
+            "settings": {"index": filtered_settings},
+            "mappings": mapping[source_index]["mappings"],
+        },
+    )
+    print(f"Index '{index_name}' created successfully.")
+
+
+def reindex_data(source_index: str, destination_index: str):
+    """
+    Reindex data from source index to destination index.
+
+    Args:
+        source_index (str): The name of the source index.
+        destination_index (str): The name of the destination index.
+    """
+    es.reindex(
+        body={"source": {"index": source_index}, "dest": {"index": destination_index}}
+    )
+    print(f"Reindexing from '{source_index}' to '{destination_index}' completed.")
+```
+
+```{python}
+# orig_index_name = "reddit_posts_unwrapped"
+index_name = "reddit_posts_unwrapped_embedding"
+# create_index(index_name, orig_index_name)
+# reindex_data(orig_index_name, index_name)
+process_and_update_documents(index=index_name)
+```
