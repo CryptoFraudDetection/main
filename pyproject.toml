@@ -6,18 +6,18 @@ build-backend = "setuptools.build_meta"
 name = "CryptoFraudDetection"
 version = "0.0.1"
 authors = [
-  { name="Gabriel Torres Gamez" },
-  { name="Can-Elian Barth" },
-  { name="Florian Baumgartner" },
-  { name="Aaron Brülisauer" },
+  { name = "Gabriel Torres Gamez" },
+  { name = "Can-Elian Barth" },
+  { name = "Florian Baumgartner" },
+  { name = "Aaron Brülisauer" },
 ]
 description = "Package for the CryptoFraudDetection project"
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
 dependencies = [
     "setuptools==70.0.0",
@@ -37,17 +37,13 @@ dependencies = [
     "ruff==0.8.0",
     "beautifulsoup4==4.12.3",
     "openai==1.55.2",
-    "transformers===4.46.3 ",
-    "numpy==2.0.0",
-    "scikit-learn==1.5.2",
-    "umap-learn==0.5.7",
 ]
 
 [project.urls]
 Homepage = "https://github.com/CryptoFraudDetection/main"
-Issues = "https://github.com/CryptoFraudDetection/main/issues"
+Taskboard = "https://github.com/orgs/CryptoFraudDetection/projects/1"
 
 [tool.ruff]
 line-length = 79
-lint.select = ["ALL",]
-lint.exclude = ["D211","D104",]
+lint.select = ["ALL"]
+lint.exclude = ["D211", "D104"]
