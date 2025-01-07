@@ -15,7 +15,6 @@ jupyter: python3
 ---
 
 ```{python}
-#| ExecuteTime: {end_time: '2025-01-04T21:21:59.852373Z', start_time: '2025-01-04T21:21:58.909596Z'}
 from pathlib import Path
 
 import pandas as pd
@@ -46,8 +45,6 @@ else:
 ```
 
 ```{python}
-#| ExecuteTime: {start_time: '2025-01-04T21:21:59.858958Z'}
-#| jupyter: {is_executing: true}
 train_set = data_pipeline.CryptoDataSet(train_df, LOGGER)
 test_set = data_pipeline.CryptoDataSet(test_df, LOGGER)
 ```
