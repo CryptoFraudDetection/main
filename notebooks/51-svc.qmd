@@ -1,0 +1,346 @@
+---
+jupyter: python3
+---
+
+```{python}
+import numpy as np
+import pandas as pd
+import swifter  # noqa: F401
+import torch
+from cuml.svm import LinearSVC
+from tqdm.notebook import tqdm
+from transformers import BertModel, BertTokenizer
+
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
+```
+
+```{python}
+print(f"Using device: {device}")
+```
+
+```{python}
+embedding_exists = None
+df_reddit = None
+
+try:
+    df_reddit = pd.read_parquet("../data/processed/reddit_posts_embedded.parquet")
+    embedding_exists = True
+    print("Embedding file found")
+except FileNotFoundError:
+    print("Embedding file not found, cleaning up and re-embedding")
+```
+
+```{python}
+if not embedding_exists:
+    df_reddit = pd.read_parquet("../data/processed/reddit_posts.parquet")
+    df_reddit["created"] = pd.to_datetime(df_reddit["created"], format="%Y-%m-%d %H:%M:%S")
+    df_reddit["edited"] = pd.to_datetime(df_reddit["edited"], format="%Y-%m-%d %H:%M:%S")
+
+df_reddit.head(1)
+```
+
+```{python}
+df_coins = pd.read_json("../data/raw/coins.json")
+df_coins["start_date"] = pd.to_datetime(df_coins["start_date"], format="ISO8601")
+df_coins["end_date"] = pd.to_datetime(df_coins["end_date"], format="ISO8601")
+df_coins = df_coins.set_index("name")
+
+df_coins.head(1)
+```
+
+```{python}
+def get_coin_info_row(row: pd.Series) -> pd.Series:
+    """
+    Get coin information for a given row.
+
+    Args:
+        row (pd.Series): A row from the dataframe containing a search_query column.
+
+    Returns:
+        pd.Series: The coin information corresponding to the search_query.
+
+    """
+    return df_coins.loc[row.search_query]
+
+
+def is_comment_valid_row(row: pd.Series) -> bool:
+    """
+    Check if a comment is valid based on the coin's start and end dates.
+
+    Args:
+        row (pd.Series): A row from the dataframe containing created and edited columns.
+
+    Returns:
+        bool: True if the comment is valid, False otherwise.
+
+    """
+    coin = get_coin_info_row(row)
+
+    comment_date = row.edited if pd.notna(row.edited) else row.created
+    start_date_valid = comment_date >= coin["start_date"]
+    end_date_valid = comment_date <= coin["end_date"] if pd.notna(coin["end_date"]) else True
+
+    return start_date_valid and end_date_valid
+```
+
+```{python}
+if not embedding_exists:
+    df_reddit["test"] = df_reddit.swifter.apply(get_coin_info_row, axis=1)["test"]
+    df_reddit["fraud"] = df_reddit.swifter.apply(get_coin_info_row, axis=1)["fraud"]
+    df_reddit["valid"] = df_reddit.swifter.apply(is_comment_valid_row, axis=1)
+
+    df_reddit = df_reddit[df_reddit["valid"]]
+    df_reddit = df_reddit.drop(columns=["valid"])
+    df_reddit = df_reddit.reset_index(drop=True)
+
+    df_reddit.head(1)
+```
+
+```{python}
+df_reddit["search_query"].value_counts()
+```
+
+```{python}
+if not embedding_exists:
+    bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    bert_embedder = BertModel.from_pretrained("bert-base-uncased").to(device)
+
+    # Pre-fetch texts as numpy array for efficient slicing
+    texts = df_reddit["body"].values
+    embeddings = []
+
+    EMBEDDING_BATCH_SIZE = 2**7
+    print(f"Embedding batch size: {EMBEDDING_BATCH_SIZE}")
+
+    # Process batches
+    for i in tqdm(range(0, len(texts), EMBEDDING_BATCH_SIZE)):
+        batch_texts = texts[i : i + EMBEDDING_BATCH_SIZE]
+        with torch.no_grad():
+            tokens = bert_tokenizer.batch_encode_plus(
+                batch_texts,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                add_special_tokens=True,
+            ).to(device)
+
+            outputs = bert_embedder(**tokens)["pooler_output"].cpu()
+            embeddings.extend(outputs.tolist())
+
+    df_reddit["embedding"] = embeddings
+```
+
+```{python}
+if not embedding_exists:
+    df_reddit.to_parquet("../data/processed/reddit_posts_embedded.parquet")
+```
+
+```{python}
+train_df = df_reddit[~df_reddit["test"]]
+test_df = df_reddit[df_reddit["test"]]
+```
+
+```{python}
+def train_svc_model(
+    data: pd.DataFrame,
+    penalty: str = "l2",
+    max_iter: int = 1000,
+    linesearch_max_iter: int = 100,
+    verbose: bool = False,
+) -> dict:
+    """
+    Train a linear SVC model.
+
+    Args:
+        data (pd.DataFrame): The data to train the model on.
+        penalty (str): The penalty to use for the model.
+        max_iter (int): The maximum number of iterations.
+        linesearch_max_iter (int): The maximum number of iterations for the line search.
+        verbose (bool): Whether to print the per-coin-results.
+
+    Returns:
+        dict_accuracy (dict): A dictionary containing the accuracy for each coin.
+
+    """
+    dict_accuracy = {}
+    for i, val_coin in enumerate(data["search_query"].unique()):
+        # Get the fitting and validation splits
+        fit_df = data[data["search_query"] != val_coin]
+        val_df = data[data["search_query"] == val_coin]
+
+        # Shuffle the fitting split
+        fit_df = fit_df.sample(frac=1, random_state=42)
+
+        # Create the embeddings
+        fit_embeddings = np.array(fit_df.embedding.to_list())
+        val_embeddings = np.array(val_df.embedding.to_list())
+
+        # Create the labels
+        fit_labels = np.array(fit_df["fraud"].to_list()) * 1
+        val_labels = np.array(val_df["fraud"].to_list()) * 1
+
+        # Create the model
+        model = LinearSVC(
+            class_weight="balanced",
+            penalty=penalty,
+            max_iter=max_iter,
+            linesearch_max_iter=linesearch_max_iter,
+        )
+        model.fit(fit_embeddings, fit_labels)
+
+        # Predict the validation set
+        predictions = model.predict(val_embeddings)
+
+        # Calculate the accuracy
+        accuracy = (predictions == val_labels).mean()
+
+        if verbose:
+            print(f"""
+            Coin left out: {val_coin}
+            Correct Label: {val_df['fraud'].iloc[0]}
+            Predicted as Fraud: {int(predictions.sum())}
+            Predicted as Not Fraud: {int(len(predictions) - predictions.sum())}
+            Mean prediction: {predictions.mean():.4f}
+            Accuracy: {accuracy:.4f}
+            """)
+
+        dict_accuracy[val_coin] = accuracy
+
+    return dict_accuracy
+
+
+def random_search_svc(data: pd.DataFrame, n_iter: int = 10, verbose: bool = False) -> dict:
+    """
+    Perform a random search for hyperparameter optimization.
+
+    Args:
+        data (pd.DataFrame): The data to train the model on.
+        n_iter (int): The number of iterations to run.
+        verbose (bool): Whether to print the per-coin-results.
+
+    Returns:
+        dict_params (dict): A dictionary containing the best hyperparameters.
+        dict_accuracy (dict): A dictionary containing the accuracy for each coin for the best hyperparameters.
+
+    """
+    dict_params = {}
+    dict_accuracy = {}
+    best_accuracy = 0
+    rng = np.random.default_rng()
+    for i in range(n_iter):
+        penalty = rng.choice(["l1", "l2"]).item()
+        max_iter = rng.integers(1, 1000)
+        linesearch_max_iter = rng.integers(1, 100)
+
+        if verbose:
+            print(f"""
+    Iteration: {i}
+    Training with:
+    Penalty: {penalty}, Max Iter: {max_iter}, Line Search Max Iter: {linesearch_max_iter}
+            """)
+
+        accuracy = train_svc_model(
+            data,
+            penalty=penalty,
+            max_iter=max_iter,
+            linesearch_max_iter=linesearch_max_iter,
+            verbose=verbose,
+        )
+
+        mean_accuracy = np.mean(list(accuracy.values()))
+        if mean_accuracy > best_accuracy and 0 not in accuracy.values():
+            best_accuracy = mean_accuracy
+            dict_params = {
+                "penalty": penalty,
+                "max_iter": max_iter,
+                "linesearch_max_iter": linesearch_max_iter,
+            }
+            dict_accuracy = accuracy
+
+    return dict_params, dict_accuracy
+```
+
+```{python}
+# dict_params, dict_accuracy = random_search_svc(train_df, n_iter=10, verbose=True)
+```
+
+```{python}
+# dict_params, dict_accuracy
+
+# see output below
+```
+
+({'penalty': 'l1',
+  'max_iter': np.int64(61),
+  'linesearch_max_iter': np.int64(96)},
+ {'Chainlink': np.float64(0.5154442538593482),
+  'Avalanche': np.float64(0.5282706809071286),
+  'THORChain': np.float64(0.5071382910718091),
+  'Bitcoin': np.float64(0.5453599037724303),
+  'Terra Luna': np.float64(0.36473569042957504),
+  'BeerCoin': np.float64(0.5950310559006211),
+  'BitForex': np.float64(0.6495595557257756)})
+
+```{python}
+fit_df = train_df.sample(frac=1, random_state=42)
+
+fit_embeddings = np.array(fit_df.embedding.to_list())
+fit_labels = np.array(fit_df.fraud.to_list()) * 1
+
+model = LinearSVC(
+    class_weight="balanced",
+    penalty="l1",
+    max_iter=61,
+    linesearch_max_iter=96,
+)
+model.fit(fit_embeddings, fit_labels)
+
+for i, coin in enumerate(test_df["search_query"].unique()):
+    coin_df = test_df[test_df["search_query"] == coin]
+    coin_embeddings = np.array(coin_df.embedding.to_list())
+    coin_labels = np.array(coin_df["fraud"].to_list()) * 1
+
+    predictions = model.predict(coin_embeddings)
+    accuracy = (predictions == coin_labels).mean()
+
+    print(f"""
+    Coin left out: {coin}
+    Correct Label: {coin_df['fraud'].iloc[0]}
+    Predicted as Fraud: {int(predictions.sum())}
+    Predicted as Not Fraud: {int(len(predictions) - predictions.sum())}
+    Mean prediction: {predictions.mean():.4f}
+    Accuracy: {accuracy:.4f}
+    """)
+```
+
+    Coin left out: Safe Moon
+    Correct Label: True
+    Predicted as Fraud: 27387
+    Predicted as Not Fraud: 41965
+    Mean prediction: 0.3949
+    Accuracy: 0.3949
+    
+
+    Coin left out: FTX Token
+    Correct Label: True
+    Predicted as Fraud: 9275
+    Predicted as Not Fraud: 12381
+    Mean prediction: 0.4283
+    Accuracy: 0.4283
+    
+
+    Coin left out: Cosmos
+    Correct Label: False
+    Predicted as Fraud: 28121
+    Predicted as Not Fraud: 28961
+    Mean prediction: 0.4926
+    Accuracy: 0.5074
+    
+
+    Coin left out: Ethereum
+    Correct Label: False
+    Predicted as Fraud: 25399
+    Predicted as Not Fraud: 47010
+    Mean prediction: 0.3508
+    Accuracy: 0.6492
+

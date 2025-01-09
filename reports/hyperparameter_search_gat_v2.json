@@ -1,0 +1,834 @@
+[
+    {
+        "training_loops": 4000,
+        "hidden_channels": 64,
+        "num_layers": 9,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.724295025728988,
+            "Avalanche": 0.7152187929246209,
+            "THORChain": 0.6954506712124441,
+            "Bitcoin": 0.7529103915927492,
+            "Terra Luna": 0.09685592537141541,
+            "BeerCoin": 0.4260869565217391,
+            "BitForex": 0.4128686327077748
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 256,
+        "num_layers": 1,
+        "lr": 0.0001,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 0.9999862778730704,
+            "Avalanche": 0.9999719675945393,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9999577949255433,
+            "Terra Luna": 0.00011516756881262236,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 32,
+        "num_layers": 8,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9613447684391081,
+            "Avalanche": 0.7682841364617498,
+            "THORChain": 0.6903899424675048,
+            "Bitcoin": 0.7855067774315398,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.46956521739130436,
+            "BitForex": 0.3799310608962084
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 16,
+        "num_layers": 3,
+        "lr": 0.0005,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 32,
+        "num_layers": 3,
+        "lr": 0.0001,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 1,
+        "lr": 0.005,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9999929658209239,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 32,
+        "num_layers": 8,
+        "lr": 0.0005,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 8,
+        "num_layers": 2,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7791423670668953,
+            "Avalanche": 0.7803100384043955,
+            "THORChain": 0.766354144470488,
+            "Bitcoin": 0.8222462947461716,
+            "Terra Luna": 0.24277323505700796,
+            "BeerCoin": 0.16770186335403728,
+            "BitForex": 0.37839908081194945
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 32,
+        "num_layers": 2,
+        "lr": 0.005,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 8,
+        "num_layers": 3,
+        "lr": 0.001,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 16,
+        "num_layers": 9,
+        "lr": 0.005,
+        "balance_labels": false,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 64,
+        "num_layers": 2,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7615917667238422,
+            "Avalanche": 0.7763855016398957,
+            "THORChain": 0.7478691668442361,
+            "Bitcoin": 0.8142484331366108,
+            "Terra Luna": 0.26891627317747324,
+            "BeerCoin": 0.3701863354037267,
+            "BitForex": 0.39486786671773266
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 128,
+        "num_layers": 6,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9992864493996569,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 1,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9994648370497428,
+            "Avalanche": 0.9997757407563143,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9997045644788025,
+            "Terra Luna": 0.008061729816883566,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 128,
+        "num_layers": 1,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.8664150943396226,
+            "Avalanche": 1.0,
+            "THORChain": 0.9996271041977414,
+            "Bitcoin": 0.9999296582092387,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.33167368824205284
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 256,
+        "num_layers": 7,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 32,
+        "num_layers": 3,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7816260720411664,
+            "Avalanche": 0.7407282818938693,
+            "THORChain": 0.7605476241210313,
+            "Bitcoin": 0.8133691607520944,
+            "Terra Luna": 0.28054819762754807,
+            "BeerCoin": 0.34285714285714286,
+            "BitForex": 0.42052853312906935
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 64,
+        "num_layers": 7,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9996295025728988,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 4,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7833413379073756,
+            "Avalanche": 0.9346284304656183,
+            "THORChain": 0.8773705518857874,
+            "Bitcoin": 0.8998965975675809,
+            "Terra Luna": 0.11988943913393989,
+            "BeerCoin": 0.02981366459627329,
+            "BitForex": 0.17311374952125622
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 32,
+        "num_layers": 3,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7609879931389365,
+            "Avalanche": 0.8101365178145936,
+            "THORChain": 0.7417430215214149,
+            "Bitcoin": 0.8464509049471381,
+            "Terra Luna": 0.24645859725901187,
+            "BeerCoin": 0.11677018633540373,
+            "BitForex": 0.3063960168517809
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 6,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6919931389365351,
+            "Avalanche": 0.7783197376166849,
+            "THORChain": 0.9996271041977414,
+            "Bitcoin": 0.9994724365692902,
+            "Terra Luna": 0.2367845214787516,
+            "BeerCoin": 0.18881987577639753,
+            "BitForex": 0.33167368824205284
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 64,
+        "num_layers": 6,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.5929331046312178,
+            "Avalanche": 0.8156028368794326,
+            "THORChain": 0.6466545919454507,
+            "Bitcoin": 0.793786006204146,
+            "Terra Luna": 0.47817574571000804,
+            "BeerCoin": 0.21614906832298136,
+            "BitForex": 0.32133282267330526
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 128,
+        "num_layers": 9,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.635746140651801,
+            "Avalanche": 1.0,
+            "THORChain": 0.9995738333688472,
+            "Bitcoin": 0.6463214760521373,
+            "Terra Luna": 0.3168259818035241,
+            "BeerCoin": 0.0,
+            "BitForex": 0.3672922252010724
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 16,
+        "num_layers": 2,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7200823327615781,
+            "Avalanche": 0.7641353404535643,
+            "THORChain": 0.7140421904964841,
+            "Bitcoin": 0.8331141014187939,
+            "Terra Luna": 0.28400322469192674,
+            "BeerCoin": 0.12546583850931678,
+            "BitForex": 0.31673688242052855
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 32,
+        "num_layers": 3,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6393687821612349,
+            "Avalanche": 0.6862613180837047,
+            "THORChain": 0.6153846153846154,
+            "Bitcoin": 0.7451868629671574,
+            "Terra Luna": 0.35356443625475065,
+            "BeerCoin": 0.22981366459627328,
+            "BitForex": 0.4844887016468786
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 64,
+        "num_layers": 1,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7606174957118353,
+            "Avalanche": 0.8304600117736103,
+            "THORChain": 0.8043362454719796,
+            "Bitcoin": 0.9121571716972771,
+            "Terra Luna": 0.19025682367845215,
+            "BeerCoin": 0.08322981366459627,
+            "BitForex": 0.26311757947146686
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 8,
+        "num_layers": 5,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6975506003430532,
+            "Avalanche": 0.7258150421887702,
+            "THORChain": 0.6648732154272321,
+            "Bitcoin": 0.7936875276970801,
+            "Terra Luna": 0.345848209144305,
+            "BeerCoin": 0.24472049689440994,
+            "BitForex": 0.4458062045193413
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 7,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6369125214408233,
+            "Avalanche": 0.8103607770582794,
+            "THORChain": 0.6325378222885149,
+            "Bitcoin": 0.9193601710712351,
+            "Terra Luna": 0.2980536680870667,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 128,
+        "num_layers": 9,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6961097770154374,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9990503858247223,
+            "Terra Luna": 0.3529885984106875,
+            "BeerCoin": 0.0,
+            "BitForex": 0.00038299502106472615
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 8,
+        "num_layers": 6,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9999313893653516,
+            "Avalanche": 0.9999439351890785,
+            "THORChain": 0.9928084380992969,
+            "Bitcoin": 0.859070222209717,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.1451551129835312
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 16,
+        "num_layers": 2,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7325008576329332,
+            "Avalanche": 0.9999159027836179,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9991629326899404,
+            "Terra Luna": 0.2867672463434297,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 16,
+        "num_layers": 7,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7733653516295026,
+            "Avalanche": 1.0,
+            "THORChain": 0.9947794587683785,
+            "Bitcoin": 0.9988463946315145,
+            "Terra Luna": 0.26488540826903145,
+            "BeerCoin": 0.0,
+            "BitForex": 0.3002680965147453
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 64,
+        "num_layers": 7,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6110325900514579,
+            "Avalanche": 0.9998878703781572,
+            "THORChain": 0.6334966972086086,
+            "Bitcoin": 0.7611192785745939,
+            "Terra Luna": 0.3548312795116895,
+            "BeerCoin": 0.31801242236024846,
+            "BitForex": 0.48219073152049025
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 8,
+        "num_layers": 7,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7360686106346483,
+            "Avalanche": 0.7795811958624169,
+            "THORChain": 0.7278393351800554,
+            "Bitcoin": 0.8220282351948116,
+            "Terra Luna": 0.26258205689277897,
+            "BeerCoin": 0.12422360248447205,
+            "BitForex": 0.3891229414017618
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 128,
+        "num_layers": 2,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6916912521440823,
+            "Avalanche": 0.7093319877778712,
+            "THORChain": 0.6543788621350948,
+            "Bitcoin": 0.7618015939449787,
+            "Terra Luna": 0.27121962455372567,
+            "BeerCoin": 0.13664596273291926,
+            "BitForex": 0.3485254691689008
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 64,
+        "num_layers": 1,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9982435677530017,
+            "Avalanche": 0.9999719675945393,
+            "THORChain": 1.0,
+            "Bitcoin": 0.8820438510723606,
+            "Terra Luna": 0.0005758378440631119,
+            "BeerCoin": 0.07950310559006211,
+            "BitForex": 0.2692454998085025
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 128,
+        "num_layers": 3,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6674716981132075,
+            "Avalanche": 0.6800381240714266,
+            "THORChain": 0.624973364585553,
+            "Bitcoin": 0.741085936565773,
+            "Terra Luna": 0.3377864793274214,
+            "BeerCoin": 0.1577639751552795,
+            "BitForex": 0.3983148219073152
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 256,
+        "num_layers": 3,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9998902229845626,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 128,
+        "num_layers": 9,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 1000,
+        "hidden_channels": 256,
+        "num_layers": 2,
+        "lr": 0.0005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6502229845626072,
+            "Avalanche": 0.7263196254870631,
+            "THORChain": 0.6931067547411037,
+            "Bitcoin": 0.8146845522393309,
+            "Terra Luna": 0.29528964643556377,
+            "BeerCoin": 0.18012422360248448,
+            "BitForex": 0.3603983148219073
+        }
+    },
+    {
+        "training_loops": 2000,
+        "hidden_channels": 64,
+        "num_layers": 9,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9993550600343053,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 32,
+        "num_layers": 6,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6864768439108062,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 0.9994865049274424,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 128,
+        "num_layers": 1,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.9266277873070325,
+            "Avalanche": 1.0,
+            "THORChain": 0.8423716173023652,
+            "Bitcoin": 0.999943726567391,
+            "Terra Luna": 0.20661061844984452,
+            "BeerCoin": 0.07453416149068323,
+            "BitForex": 0.00038299502106472615
+        }
+    },
+    {
+        "training_loops": 500,
+        "hidden_channels": 16,
+        "num_layers": 9,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7204528301886792,
+            "Avalanche": 0.6457825245984358,
+            "THORChain": 0.67030683997443,
+            "Bitcoin": 0.8174630529744026,
+            "Terra Luna": 0.29575031671081425,
+            "BeerCoin": 0.24347826086956523,
+            "BitForex": 0.39946380697050937
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 32,
+        "num_layers": 9,
+        "lr": 0.001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.4585523156089194,
+            "Avalanche": 0.6708995598912343,
+            "THORChain": 0.6900170466652461,
+            "Bitcoin": 0.7052678967101145,
+            "Terra Luna": 0.30968559253714156,
+            "BeerCoin": 0.16645962732919253,
+            "BitForex": 0.4714668709306779
+        }
+    },
+    {
+        "training_loops": 8000,
+        "hidden_channels": 256,
+        "num_layers": 7,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 1.0,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 1.0,
+            "Terra Luna": 0.0,
+            "BeerCoin": 0.0,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 16,
+        "num_layers": 2,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7219622641509434,
+            "Avalanche": 0.7634345303170466,
+            "THORChain": 0.7251225229064564,
+            "Bitcoin": 0.830806890681823,
+            "Terra Luna": 0.27421398134285385,
+            "BeerCoin": 0.16521739130434782,
+            "BitForex": 0.33320566832631177
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 8,
+        "num_layers": 3,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7331320754716981,
+            "Avalanche": 1.0,
+            "THORChain": 0.6860217344981888,
+            "Bitcoin": 0.7639259160259702,
+            "Terra Luna": 0.3095704249683289,
+            "BeerCoin": 0.17515527950310558,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 8000,
+        "hidden_channels": 16,
+        "num_layers": 1,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7593138936535163,
+            "Avalanche": 0.8378325344097777,
+            "THORChain": 0.8211698274025144,
+            "Bitcoin": 0.8902738405914338,
+            "Terra Luna": 0.2055741103305309,
+            "BeerCoin": 0.07204968944099378,
+            "BitForex": 0.23783990808119496
+        }
+    },
+    {
+        "training_loops": 4000,
+        "hidden_channels": 8,
+        "num_layers": 8,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6574408233276158,
+            "Avalanche": 1.0,
+            "THORChain": 1.0,
+            "Bitcoin": 0.8092541659925578,
+            "Terra Luna": 0.2435794080386963,
+            "BeerCoin": 0.2,
+            "BitForex": 0.0
+        }
+    },
+    {
+        "training_loops": 8000,
+        "hidden_channels": 128,
+        "num_layers": 2,
+        "lr": 0.0001,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.6354305317324185,
+            "Avalanche": 0.6806548369915623,
+            "THORChain": 0.6287555934370339,
+            "Bitcoin": 0.7452009313253097,
+            "Terra Luna": 0.3089945871242658,
+            "BeerCoin": 0.22236024844720498,
+            "BitForex": 0.446189199540406
+        }
+    },
+    {
+        "training_loops": 8000,
+        "hidden_channels": 16,
+        "num_layers": 2,
+        "lr": 0.005,
+        "balance_labels": true,
+        "accuracies": {
+            "Chainlink": 0.7065385934819897,
+            "Avalanche": 0.9999159027836179,
+            "THORChain": 0.6445237587896868,
+            "Bitcoin": 0.9996412568671174,
+            "Terra Luna": 0.2904526085454336,
+            "BeerCoin": 0.2956521739130435,
+            "BitForex": 0.002297970126388357
+        }
+    }
+]
