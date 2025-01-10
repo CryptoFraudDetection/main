@@ -5,7 +5,7 @@
 #SBATCH --partition=performance       # Partition/queue name
 #SBATCH --time=1-00:00:00             # Maximum runtime (2 days)
 #SBATCH --cpus-per-task=12            # CPUs per task
-#SBATCH --mem=64GB                    # Memory per node
+#SBATCH --mem=32GB                    # Memory per node
 #SBATCH --gpus=1                      # Number of GPUs
 #SBATCH --nodes=1                     # Number of nodes
 #SBATCH --ntasks=1                    # Number of tasks
