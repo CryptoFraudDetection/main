@@ -14,7 +14,7 @@ from CryptoFraudDetection.utils import data_pipeline, enums, logger
 torch.manual_seed(42)
 np.random.seed(42)
 
-LOGGER = logger.Logger(
+_LOGGER = logger.Logger(
     name=__name__,
     level=enums.LoggerMode.INFO,
     log_dir="../logs",
@@ -24,7 +24,7 @@ LOGGER = logger.Logger(
 # -------------------------------------------------------------------
 # Basline LSTM Classification Model
 # -------------------------------------------------------------------
-class LSTMClassifier(nn.Module):
+class _LSTMClassifier(nn.Module):
     def __init__(
         self,
         input_size: int,
@@ -67,9 +67,7 @@ class LSTMClassifier(nn.Module):
             device=x.device,
         )
         lstm_out, _ = self.lstm(x, (h_0, c_0))
-        # Take the last time-step output: shape (batch_size, hidden_size * num_directions)
-        last_out = lstm_out[:, -1, :]
-        logits = self.fc(last_out)
+        logits = self.fc(lstm_out)
         probs = self.sigmoid(logits)
         return probs
 
@@ -77,87 +75,101 @@ class LSTMClassifier(nn.Module):
 # -------------------------------------------------------------------
 # Training loop
 # -------------------------------------------------------------------
-def train_one_epoch(
-    model,
-    train_loader,
-    criterion,
-    optimizer,
-    device,
+def _train_one_epoch(
+    model: nn.Module,
+    train_loader: DataLoader,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    device: torch.device,
     metric_functions: dict,
-) -> float:
+) -> tuple[float, dict]:
+    """Train model for one epoch following efficient metric computation pattern.
+
+    Args:
+        model: The neural network model
+        train_loader: DataLoader for training data
+        criterion: Loss function
+        optimizer: Optimizer for updating weights
+        device: Device to run computations on
+        metric_functions: Dictionary of metric functions
+
+    Returns:
+        Tuple of (epoch_loss, metric_values)
+
+    """
+    model.train()
+    running_loss = 0.0
+    n_samples = 0
+
+    # Reset all metrics at start of epoch
     for metric_func in metric_functions.values():
         metric_func.reset()
 
-    model.train()
-    running_loss = 0.0
-
     for x_batch, y_batch in tqdm.tqdm(train_loader):
         x_batch = x_batch.to(device)
-        # y_batch shape: (batch_size, 1)
-        y_batch = y_batch[:, -1].unsqueeze(1).to(device)
+        y_batch = y_batch.to(device)
 
         optimizer.zero_grad()
         outputs = model(x_batch)
         loss = criterion(outputs, y_batch)
         loss.backward()
         optimizer.step()
-        running_loss += loss.item() * x_batch.size(0)
 
-        rounded_outputs = torch.round(outputs)
+        # Accumulate loss
+        running_loss += loss.item()
+        n_samples += y_batch.size(0)
+
+        # Update metrics - let torchmetrics handle thresholding
         for metric_func in metric_functions.values():
-            metric_func(rounded_outputs, y_batch)
+            metric_func.update(outputs, y_batch)
 
-    epoch_loss = running_loss / len(train_loader.dataset)
+    # Compute epoch metrics
+    loss = running_loss / n_samples
+    metric_values = {
+        name: metric_func.compute().item()
+        for name, metric_func in metric_functions.items()
+    }
 
-    metric_values = {}
-    for metric, metric_func in metric_functions.items():
-        metric_values[metric] = metric_func.compute().item()
-
-    return epoch_loss, metric_values
+    return loss, metric_values
 
 
 @torch.no_grad()
-def validate_one_epoch(
-    model,
-    val_loader,
-    criterion,
-    device,
-    metrics_functions: dict,
-) -> tuple[float, float, float, float, float]:
-    """Validate the model for one epoch.
-
-    Args:
-        model (nn.Module): The model being evaluated.
-        val_loader (DataLoader): The validation data loader.
-        criterion (nn.Module): The loss function.
-        device (torch.device): The device for computation.
-
-    Returns:
-        loss, accuracy, precision, recall, f1
-
-    """
-    for metric_func in metrics_functions.values():
-        metric_func.reset()
-
+def _validate_one_epoch(
+    model: nn.Module,
+    val_loader: DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+    metric_functions: dict,
+) -> tuple[float, dict]:
+    """Validate model for one epoch using efficient metric computation."""
     model.eval()
     running_loss = 0.0
+    n_samples = 0
+
+    # Reset all metrics at start of validation
+    for metric_func in metric_functions.values():
+        metric_func.reset()
 
     for x_batch, y_batch in val_loader:
         x_batch = x_batch.to(device)
-        y_batch = y_batch[:, -1].unsqueeze(1).to(device)
+        y_batch = y_batch.to(device)
 
         outputs = model(x_batch)
-        rounded_outputs = torch.round(outputs)
-        loss = criterion(rounded_outputs, y_batch)
-        running_loss += loss.item() * x_batch.size(0)
-        for metric_func in metrics_functions.values():
-            metric_func(rounded_outputs, y_batch)
+        loss = criterion(outputs, y_batch)
 
-    epoch_loss = running_loss / len(val_loader.dataset)
-    metric_values = {}
-    for metric, metric_func in metrics_functions.items():
-        metric_values[metric] = metric_func.compute().item()
-    return epoch_loss, metric_values
+        running_loss += loss.item()
+        n_samples += y_batch.size(0)
+
+        for metric_func in metric_functions.values():
+            metric_func.update(outputs, y_batch)
+
+    loss = running_loss / n_samples
+    metric_values = {
+        name: metric_func.compute().item()
+        for name, metric_func in metric_functions.items()
+    }
+
+    return loss, metric_values
 
 
 type Batch = tuple[torch.Tensor, torch.Tensor]
@@ -187,32 +199,35 @@ def collate_fn(batch: list[Sample]) -> Batch:
     return x_padded, y_padded
 
 
-# Initialize metrics with correct task and averaging
 def get_metric_functions(
-    device: torch.DeviceObjType, prefix: str = "",
-) -> dict[str, torchmetrics.Metric]:
+    device: torch.device, prefix: str = "", threshold: float = 0.5,
+) -> dict:
+    """Initialize binary classification metrics."""
     return {
-        f"{prefix}accuracy": torchmetrics.classification.BinaryAccuracy().to(
-            device,
-        ),
-        f"{prefix}precision": torchmetrics.classification.BinaryPrecision().to(
-            device,
-        ),
-        f"{prefix}recall": torchmetrics.classification.BinaryRecall().to(
-            device,
-        ),
-        f"{prefix}f1": torchmetrics.classification.BinaryF1Score().to(device),
+        f"{prefix}_accuracy": torchmetrics.classification.BinaryAccuracy(
+            threshold=threshold,
+        ).to(device),
+        f"{prefix}_precision": torchmetrics.classification.BinaryPrecision(
+            threshold=threshold,
+        ).to(device),
+        f"{prefix}_recall": torchmetrics.classification.BinaryRecall(
+            threshold=threshold,
+        ).to(device),
+        f"{prefix}_f1": torchmetrics.classification.BinaryF1Score(
+            threshold=threshold,
+        ).to(device),
     }
 
 
 # -------------------------------------------------------------------
 # Train one Fold Function
 # -------------------------------------------------------------------
-def train_fold(
+def _train_fold(
     train_dataset: data_pipeline.CryptoDataSet,
     val_dataset: data_pipeline.CryptoDataSet,
     config: dict,
     logger_: logger.Logger,
+    threshold:float,
 ) -> None:
     """Read data and train the model with hyperparameter tuning.
 
@@ -271,7 +286,7 @@ def train_fold(
         # ---------------------------
         # 2. Define Model, Loss, Optimizer
         # ---------------------------
-        model = LSTMClassifier(
+        model = _LSTMClassifier(
             input_size=input_size,
             hidden_size=config.hidden_size,
             num_layers=config.num_layers,
@@ -287,10 +302,10 @@ def train_fold(
         best_val_loss, best_val_f1 = float("inf"), 0.0
         patience = 5
         no_improvement_epochs = 0
-        train_metric_functions = get_metric_functions(device, "train")
-        val_metric_functions = get_metric_functions(device, "val")
-        for epoch in range(config.epochs):
-            train_loss, train_metrics = train_one_epoch(
+        train_metric_functions = get_metric_functions(device, "train", threshold)
+        val_metric_functions = get_metric_functions(device, "val", threshold)
+        for _ in range(config.epochs):
+            train_loss, train_metrics = _train_one_epoch(
                 model,
                 train_loader,
                 criterion,
@@ -298,7 +313,7 @@ def train_fold(
                 device,
                 train_metric_functions,
             )
-            val_loss, val_metrics = validate_one_epoch(
+            val_loss, val_metrics = _validate_one_epoch(
                 model,
                 val_loader,
                 criterion,
@@ -325,7 +340,7 @@ def train_fold(
                 best_val_f1 = val_metrics["val_f1"]
                 no_improvement_epochs = 0
 
-                # Convert all config values to strings and join them with underscores
+                # Convert all config values to strings
                 config_str = "_".join(
                     [f"{key}_{value}" for key, value in config.items()],
                 )
@@ -338,10 +353,6 @@ def train_fold(
                     logger_.info("Early stopping triggered")
                     break
 
-            logger_.debug(
-                f"Epoch {epoch+1}/{config.epochs}, train_loss={train_loss:.4f}, val_loss={val_loss:.4f}",
-            )
-
 
 def train_model(config: dict | None = None) -> None:
     if config is None:
@@ -352,35 +363,35 @@ def train_model(config: dict | None = None) -> None:
             "hidden_size": 32,
             "num_layers": 2,
             "dropout": 0.2,
-            "n_cutoff_points": 10,
+            "n_cutoff_points": 1,
             "n_groups_cutoff_points": 1,
         }
 
     # Read data from data pipeline
-    crypto_data = data_pipeline.CryptoData(LOGGER, Path("data"))
+    crypto_data = data_pipeline.CryptoData(_LOGGER, Path("data"))
     train_df, _ = crypto_data.load_data()
     train_coins = train_df["coin"].unique()
-    LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
+    _LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
     for i, coin in enumerate(train_coins):
         config["val_coin"] = coin
         train_df, val_df = crypto_data.train_val_split(coin)
 
         train_dataset = data_pipeline.CryptoDataSet(
             df=train_df,
-            logger_=LOGGER,
+            logger_=_LOGGER,
             n_cutoff_points=config["n_cutoff_points"],
             n_groups_cutoff_points=config["n_groups_cutoff_points"],
         )
         val_dataset = data_pipeline.CryptoDataSet(
             df=val_df,
-            logger_=LOGGER,
+            logger_=_LOGGER,
             n_cutoff_points=config["n_cutoff_points"],
             n_groups_cutoff_points=config["n_groups_cutoff_points"],
         )
 
-        train_fold(train_dataset, val_dataset, config, LOGGER)
-        LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
-    LOGGER.info("All folds are done.")
+        _train_fold(train_dataset, val_dataset, config, _LOGGER)
+        _LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
+    _LOGGER.info("All folds are done.")
 
 
 if __name__ == "__main__":
