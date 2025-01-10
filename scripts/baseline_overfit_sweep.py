@@ -15,16 +15,16 @@ sweep_config = {
     "parameters": {
         # All parameters from baseline model's default config
         "lr": {"values": [5e-3]},
-        "hidden_size": {"values": [256]},
+        "hidden_size": {"values": [32]},
         "num_layers": {"values": [2]},
         "dropout": {"values": [0.0]},
-        "batch_size": {"values": [8]},
+        "batch_size": {"values": [64]},
         "weight_decay": {"values": [0.0]},
         # Fixed parameters
         "epochs": {"value": 1000},
         "patience": {"value": 100},
         "n_cutoff_points": {"value": 1},
-        "n_groups_cutoff_points": {"value": 11},
+        "n_groups_cutoff_points": {"value": 1},
         "threshold": {"value": 0.5},
     },
 }
