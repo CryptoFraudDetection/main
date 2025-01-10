@@ -83,27 +83,18 @@ def train_one_epoch(
     criterion,
     optimizer,
     device,
+    metric_functions: dict,
 ) -> float:
+    for metric_func in metric_functions.values():
+        metric_func.reset()
+
     model.train()
     running_loss = 0.0
 
-    for x_batch, y_batch in train_loader:
-        # x_batch shape: (batch_size, seq_len, input_size)
-        # y_batch shape: (batch_size, seq_len) -> but we only use y of last step or we might do a single label
-        # NOTE: In your dataset, y_batch is shape (batch_size, seq_len).
-        #       If you are doing a single-label classification (fraud or not), you could:
-        #       - Take the *last* label of the sequence
-        #       - Or do some other labeling strategy
-        #
-        # For simplicity: let's take y_batch[:, -1] as the label that indicates if the coin eventually is fraud or not
-        # (In reality, you may define your labeling differently.)
+    for x_batch, y_batch in tqdm.tqdm(train_loader):
         x_batch = x_batch.to(device)
-        # Here, we assume the fraud label is *constant* over the entire sequence,
-        # so just take the last label for the entire sequence.
-        # If your dataset has a single y per sequence, you can do y_batch = y_batch[:, 0]
-        y_batch = (
-            y_batch[:, -1].unsqueeze(1).to(device)
-        )  # shape (batch_size, 1)
+        # y_batch shape: (batch_size, 1)
+        y_batch = y_batch[:, -1].unsqueeze(1).to(device)
 
         optimizer.zero_grad()
         outputs = model(x_batch)
@@ -112,8 +103,17 @@ def train_one_epoch(
         optimizer.step()
         running_loss += loss.item() * x_batch.size(0)
 
+        rounded_outputs = torch.round(outputs)
+        for metric_func in metric_functions.values():
+            metric_func(rounded_outputs, y_batch)
+
     epoch_loss = running_loss / len(train_loader.dataset)
-    return epoch_loss
+
+    metric_values = {}
+    for metric, metric_func in metric_functions.items():
+        metric_values[metric] = metric_func.compute().item()
+
+    return epoch_loss, metric_values
 
 
 @torch.no_grad()
@@ -122,10 +122,7 @@ def validate_one_epoch(
     val_loader,
     criterion,
     device,
-    accuracy_metric,
-    precision_metric,
-    recall_metric,
-    f1_metric,
+    metrics_functions: dict,
 ) -> tuple[float, float, float, float, float]:
     """Validate the model for one epoch.
 
@@ -139,10 +136,8 @@ def validate_one_epoch(
         loss, accuracy, precision, recall, f1
 
     """
-    accuracy_metric.reset()
-    precision_metric.reset()
-    recall_metric.reset()
-    f1_metric.reset()
+    for metric_func in metrics_functions.values():
+        metric_func.reset()
 
     model.eval()
     running_loss = 0.0
@@ -152,19 +147,62 @@ def validate_one_epoch(
         y_batch = y_batch[:, -1].unsqueeze(1).to(device)
 
         outputs = model(x_batch)
-        loss = criterion(outputs, y_batch)
+        rounded_outputs = torch.round(outputs)
+        loss = criterion(rounded_outputs, y_batch)
         running_loss += loss.item() * x_batch.size(0)
-        accuracy_metric(outputs, y_batch)
-        precision_metric(outputs, y_batch)
-        recall_metric(outputs, y_batch)
-        f1_metric(outputs, y_batch)
+        for metric_func in metrics_functions.values():
+            metric_func(rounded_outputs, y_batch)
 
     epoch_loss = running_loss / len(val_loader.dataset)
-    epoch_accuracy = accuracy_metric.compute().item()
-    epoch_precision = precision_metric.compute().item()
-    epoch_recall = recall_metric.compute().item()
-    epoch_f1 = f1_metric.compute().item()
-    return epoch_loss, epoch_accuracy, epoch_precision, epoch_recall, epoch_f1
+    metric_values = {}
+    for metric, metric_func in metrics_functions.items():
+        metric_values[metric] = metric_func.compute().item()
+    return epoch_loss, metric_values
+
+
+type Batch = tuple[torch.Tensor, torch.Tensor]
+type Sample = Batch
+
+
+def collate_fn(batch: list[Sample]) -> Batch:
+    """Collate function to prepare a batch of data for DataLoader.
+
+    Pads sequences in x and y tensors to the length of the longest
+    sequence in the batch and adds a batch dimension.
+
+    Args:
+        batch: A list of tuples where each tuple contains:
+            - x: Tensor of shape (seq_len, input_size)
+            - y: Tensor of shape (seq_len,)
+
+    Returns:
+        Batch: A tuple containing:
+            - x_padded: Padded x tensor of shape (batch_size, max_seq_len, input_size)
+            - y_padded: Padded y tensor of shape (batch_size, max_seq_len)
+
+    """
+    x, y = zip(*batch, strict=True)
+    x_padded = pad_sequence(x, batch_first=True, padding_value=0.0)
+    y_padded = pad_sequence(y, batch_first=True, padding_value=0.0)
+    return x_padded, y_padded
+
+
+# Initialize metrics with correct task and averaging
+def get_metric_functions(
+    device: torch.DeviceObjType, prefix: str = "",
+) -> dict[str, torchmetrics.Metric]:
+    return {
+        f"{prefix}accuracy": torchmetrics.classification.BinaryAccuracy().to(
+            device,
+        ),
+        f"{prefix}precision": torchmetrics.classification.BinaryPrecision().to(
+            device,
+        ),
+        f"{prefix}recall": torchmetrics.classification.BinaryRecall().to(
+            device,
+        ),
+        f"{prefix}f1": torchmetrics.classification.BinaryF1Score().to(device),
+    }
 
 
 # -------------------------------------------------------------------
@@ -203,32 +241,12 @@ def train_fold(
         # ---------------------------
         # 1. Prepare Data
         # ---------------------------
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        type Batch = tuple[torch.Tensor, torch.Tensor]
-        type Sample = Batch
-
-        def collate_fn(batch: list[Sample]) -> Batch:
-            """Collate function to prepare a batch of data for DataLoader.
-
-            Pads sequences in x and y tensors to the length of the longest
-            sequence in the batch and adds a batch dimension.
-
-            Args:
-                batch: A list of tuples where each tuple contains:
-                    - x: Tensor of shape (seq_len, input_size)
-                    - y: Tensor of shape (seq_len,)
-
-            Returns:
-                Batch: A tuple containing:
-                    - x_padded: Padded x tensor of shape (batch_size, max_seq_len, input_size)
-                    - y_padded: Padded y tensor of shape (batch_size, max_seq_len)
-
-            """
-            x, y = zip(*batch, strict=True)
-            x_padded = pad_sequence(x, batch_first=True, padding_value=0.0)
-            y_padded = pad_sequence(y, batch_first=True, padding_value=0.0)
-            return x_padded, y_padded
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+        elif torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
         train_loader = DataLoader(
             train_dataset,
@@ -269,57 +287,42 @@ def train_fold(
         best_val_loss, best_val_f1 = float("inf"), 0.0
         patience = 5
         no_improvement_epochs = 0
-        accuracy_metric = torchmetrics.classification.Accuracy(
-            task="binary",
-        ).to(device)
-        precision_metric = torchmetrics.classification.Precision(
-            task="binary",
-        ).to(device)
-        recall_metric = torchmetrics.classification.Recall(task="binary").to(
-            device,
-        )
-        f1_metric = torchmetrics.classification.F1Score(task="binary").to(
-            device,
-        )
+        train_metric_functions = get_metric_functions(device, "train")
+        val_metric_functions = get_metric_functions(device, "val")
         for epoch in range(config.epochs):
-            train_loss = train_one_epoch(
+            train_loss, train_metrics = train_one_epoch(
                 model,
                 train_loader,
                 criterion,
                 optimizer,
                 device,
+                train_metric_functions,
             )
-            val_loss, val_accuracy, val_precision, val_recall, val_f1 = (
-                validate_one_epoch(
-                    model,
-                    val_loader,
-                    criterion,
-                    device,
-                    accuracy_metric,
-                    precision_metric,
-                    recall_metric,
-                    f1_metric,
-                )
+            val_loss, val_metrics = validate_one_epoch(
+                model,
+                val_loader,
+                criterion,
+                device,
+                val_metric_functions,
             )
 
             # Log metrics to wandb
             wandb.log(
                 {
                     "val_coin": config["val_coin"],
-                    "epoch": epoch,
                     "train_loss": train_loss,
                     "val_loss": val_loss,
-                    "val_accuracy": val_accuracy,
-                    "val_precision": val_precision,
-                    "val_recall": val_recall,
-                    "val_f1": val_f1,
+                    **train_metrics,
+                    **val_metrics,
                 },
             )
 
             # Save best model (optional)
-            if (val_loss < best_val_loss) and (val_f1 > best_val_f1):
+            if (val_loss < best_val_loss) and (
+                val_metrics["val_f1"] > best_val_f1
+            ):
                 best_val_loss = val_loss
-                best_val_f1 = val_f1
+                best_val_f1 = val_metrics["val_f1"]
                 no_improvement_epochs = 0
 
                 # Convert all config values to strings and join them with underscores
@@ -344,35 +347,41 @@ def train_model(config: dict | None = None) -> None:
     if config is None:
         config = {
             "epochs": 10,
-            "batch_size": 1,
+            "batch_size": 8,
             "lr": 0.001,
-            "hidden_size": 128,
+            "hidden_size": 32,
             "num_layers": 2,
             "dropout": 0.2,
-            "n_cutoff_points": 100,
-            "n_groups_cutoff_points": 10,
+            "n_cutoff_points": 10,
+            "n_groups_cutoff_points": 1,
         }
 
     # Read data from data pipeline
-    crypto_data = data_pipeline.CryptoData(LOGGER)
+    crypto_data = data_pipeline.CryptoData(LOGGER, Path("data"))
     train_df, _ = crypto_data.load_data()
-
-    for coin in tqdm(crypto_data.coin_info):
-        train_df, val_df = crypto_data.train_val_split(coin["symbol"])
+    train_coins = train_df["coin"].unique()
+    LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
+    for i, coin in enumerate(train_coins):
+        config["val_coin"] = coin
+        train_df, val_df = crypto_data.train_val_split(coin)
 
         train_dataset = data_pipeline.CryptoDataSet(
             df=train_df,
-            logger_=logger,
-            n_cutoff_points=config.n_cutoff_points,
-            n_groups_cutoff_points=config.n_groups_cutoff_points,
+            logger_=LOGGER,
+            n_cutoff_points=config["n_cutoff_points"],
+            n_groups_cutoff_points=config["n_groups_cutoff_points"],
         )
         val_dataset = data_pipeline.CryptoDataSet(
             df=val_df,
-            logger_=logger,
-            n_cutoff_points=config.n_cutoff_points,
-            n_groups_cutoff_points=config.n_groups_cutoff_points,
+            logger_=LOGGER,
+            n_cutoff_points=config["n_cutoff_points"],
+            n_groups_cutoff_points=config["n_groups_cutoff_points"],
         )
 
         train_fold(train_dataset, val_dataset, config, LOGGER)
-        LOGGER.info(f"Fold with coin {coin["symbol"]} done.")
+        LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
     LOGGER.info("All folds are done.")
+
+
+if __name__ == "__main__":
+    train_model()

@@ -80,10 +80,7 @@ class CryptoData:
 
         train_parquet_path = self.data_dir / self.train_parquet_path
         test_parquet_path = self.data_dir / self.test_parquet_path
-        if (
-            train_parquet_path.exists()
-            and test_parquet_path.exists()
-        ):
+        if train_parquet_path.exists() and test_parquet_path.exists():
             self.train_df = pd.read_parquet(train_parquet_path)
             self.test_df = pd.read_parquet(test_parquet_path)
             self._logger.info("Processed data found, loading it.")
@@ -297,7 +294,8 @@ class CryptoData:
         self.test_df = self.merged_df[self.merged_df["coin"].isin(test_coins)]
 
     def train_val_split(
-        self, coin_for_val: str,
+        self,
+        coin_for_val: str,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Return (train_subset, val_subset) for the given coin.
 
@@ -312,7 +310,7 @@ class CryptoData:
         """
         if self.train_df is None:
             self._logger.error(
-                "train_df is None. Make sure to call `preprocess()` first to split data."
+                "train_df is None. Make sure to call `preprocess()` first to split data.",
             )
 
         val_df = self.train_df[self.train_df["coin"] == coin_for_val].copy()
@@ -320,14 +318,13 @@ class CryptoData:
 
         # Optionally log if val_subset is empty
         if val_df.empty:
-            self._logger.error(f"No rows found for coin '{coin_for_val}' in training data.")
+            self._logger.error(
+                f"No rows found for coin '{coin_for_val}' in training data.",
+            )
 
         return train_df, val_df
 
-
-    def save_data(
-        self
-    ) -> None:
+    def save_data(self) -> None:
         train_parquet_path = self.data_dir / self.train_parquet_path
         test_parquet_path = self.data_dir / self.test_parquet_path
         self.train_df.to_parquet(train_parquet_path)
