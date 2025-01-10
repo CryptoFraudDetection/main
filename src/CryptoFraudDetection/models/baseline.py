@@ -344,7 +344,6 @@ def _train_fold(
         optimizer = optim.Adam(model.parameters(), lr=config.lr)
 
         best_val_loss, best_val_accuracy = float("inf"), 0.0
-        patience = 5
         no_improvement_epochs = 0
         train_metric_functions = get_metric_objects(
             device,
@@ -400,7 +399,7 @@ def _train_fold(
                 logger_.info(f"Model saved to {model_path}")
             else:
                 no_improvement_epochs += 1
-                if no_improvement_epochs >= patience:
+                if no_improvement_epochs >= config["patience"]:
                     logger_.info("Early stopping triggered")
                     break
 
@@ -424,9 +423,10 @@ def train_model(
             "hidden_size": 128,
             "num_layers": 2,
             "dropout": 0.2,
-            "n_cutoff_points": 1,
-            "n_groups_cutoff_points": 1,
+            "n_cutoff_points": 100,
+            "n_groups_cutoff_points": 10,
             "threshold": 0.5,
+            "patience": 20,
         }
 
     # Read data from data pipeline
