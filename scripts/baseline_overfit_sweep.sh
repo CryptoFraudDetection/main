@@ -24,8 +24,8 @@ pip install -e .
 # Run sweep agent
 if [ -z "$1" ]; then
     echo "No sweep ID provided. Starting new sweep..."
-    python scripts/baseline_sweep.py
+    python scripts/baseline_overfit_sweep.py
 else
     echo "Running agent for sweep: $1"
-    python scripts/baseline_sweep.py --sweep_id "$1"
+    python scripts/baseline_overfit_sweep.py --sweep_id "$1"
 fi
