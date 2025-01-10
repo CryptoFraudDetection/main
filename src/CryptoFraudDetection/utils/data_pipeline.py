@@ -471,5 +471,5 @@ class CryptoDataSet(data.Dataset):
         # Convert to PyTorch tensors
         return (
             torch.tensor(x, dtype=torch.float32),
-            torch.tensor(y[-1], dtype=torch.float32),
+            torch.tensor([y[-1]], dtype=torch.float32),
         )
