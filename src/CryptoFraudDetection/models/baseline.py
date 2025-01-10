@@ -319,7 +319,6 @@ def _train_fold(
             shuffle=True,
             drop_last=True,
             collate_fn=collate_fn,
-            num_workers=4,
         )
         val_loader = DataLoader(
             val_dataset,
@@ -327,7 +326,6 @@ def _train_fold(
             shuffle=False,
             drop_last=False,
             collate_fn=collate_fn,
-            num_workers=4,
         )
 
         # We must determine input_size from the shape of the merged_features
