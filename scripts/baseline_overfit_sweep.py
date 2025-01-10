@@ -18,7 +18,7 @@ sweep_config = {
         "hidden_size": {"values": [32]},
         "num_layers": {"values": [2]},
         "dropout": {"values": [0.0]},
-        "batch_size": {"values": [64]},
+        "batch_size": {"values": [32]},
         "weight_decay": {"values": [0.0]},
         # Fixed parameters
         "epochs": {"value": 1000},
