@@ -2,11 +2,12 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torchmetrics.classification
+import torchmetrics
 import tqdm
 from torch import nn, optim
-from torch.nn.utils.rnn import pad_sequence
+from torch.nn.utils import rnn
 from torch.utils.data import DataLoader
+from torchmetrics import classification
 
 import wandb
 from CryptoFraudDetection.utils import data_pipeline, enums, logger
@@ -67,9 +68,9 @@ class _LSTMClassifier(nn.Module):
             device=x.device,
         )
         lstm_out, _ = self.lstm(x, (h_0, c_0))
-        logits = self.fc(lstm_out)
-        probs = self.sigmoid(logits)
-        return probs
+        last_hidden = lstm_out[:, -1, :]
+        logits = self.fc(last_hidden)
+        return self.sigmoid(logits).squeeze(-1)
 
 
 # -------------------------------------------------------------------
@@ -119,7 +120,7 @@ def _train_one_epoch(
         running_loss += loss.item()
         n_samples += y_batch.size(0)
 
-        # Update metrics - let torchmetrics handle thresholding
+        # Update metrics
         for metric_func in metric_functions.values():
             metric_func.update(outputs, y_batch)
 
@@ -177,47 +178,116 @@ type Sample = Batch
 
 
 def collate_fn(batch: list[Sample]) -> Batch:
-    """Collate function to prepare a batch of data for DataLoader.
+    """Efficiently collate samples into batched tensors.
 
-    Pads sequences in x and y tensors to the length of the longest
-    sequence in the batch and adds a batch dimension.
+    Pads feature sequences to the length of the longest sequence in the batch
+    and stacks the labels directly.
 
     Args:
-        batch: A list of tuples where each tuple contains:
-            - x: Tensor of shape (seq_len, input_size)
-            - y: Tensor of shape (seq_len,)
+        batch: List of (features, label) tuples where:
+            - features: Tensor of shape (seq_len, input_size)
+            - label: Scalar tensor
 
     Returns:
-        Batch: A tuple containing:
-            - x_padded: Padded x tensor of shape (batch_size, max_seq_len, input_size)
-            - y_padded: Padded y tensor of shape (batch_size, max_seq_len)
+        tuple[torch.Tensor, torch.Tensor]:
+            - Padded features tensor of shape (batch_size, max_seq_len, input_size)
+            - Stacked labels tensor of shape (batch_size,)
 
     """
-    x, y = zip(*batch, strict=True)
-    x_padded = pad_sequence(x, batch_first=True, padding_value=0.0)
-    y_padded = pad_sequence(y, batch_first=True, padding_value=0.0)
-    return x_padded, y_padded
+    features, labels = zip(*batch, strict=True)
+    x = rnn.pad_sequence(features, batch_first=True, padding_value=0.0)
+    y = torch.stack(labels)
+    return x, y
 
 
-def get_metric_functions(
-    device: torch.device, prefix: str = "", threshold: float = 0.5,
-) -> dict:
-    """Initialize binary classification metrics."""
-    return {
-        f"{prefix}_accuracy": torchmetrics.classification.BinaryAccuracy(
+class MeanPrediction(torchmetrics.Metric):
+    """Calculate the mean value of the predictions (y_pred)."""
+
+    def __init__(self, dist_sync_on_step: bool = False):
+        """Initialize Class.
+
+        Args:
+            dist_sync_on_step: if True, synchronizes metric state across processes at each `forward()` before returning the value at the step.
+
+        """
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+
+        # Add states to track the sum of predictions and the count of predictions
+        # "sum" and "count" will be reduced across multiple processes if distributed training is used.
+        self.add_state("sum", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("count", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> None:
+        """Update the states with the latest batch of predictions.
+
+        Args:
+            y_pred: Model predictions for the batch (can be logits, probabilities, or any numeric values).
+            y_true: Ground truth values (not used in this metric, but must be present for consistency with torchmetrics API).
+
+        """
+        # Ensure y_pred is a float tensor
+        y_pred = y_pred.float()
+
+        # Accumulate the sum of all predictions in this batch
+        self.sum += y_pred.sum()
+
+        # Accumulate the number of predictions in this batch
+        self.count += y_pred.numel()
+
+    def compute(self) -> torch.Tensor:
+        """Compute and return the mean of all predictions seen so far."""
+        # Handle the case of zero predictions to avoid division by zero
+        if self.count == 0:
+            return torch.tensor(0.0, device=self.sum.device)
+
+        return self.sum / self.count
+
+
+def get_metric_objects(
+    device: torch.device,
+    prefix: str = "",
+    threshold: float = 0.5,
+    val_metrics: list[str] | None = None,
+) -> dict[str, torchmetrics.Metric]:
+    """Initialize binary classification metrics.
+
+    Args:
+        device: The device to move metrics to.
+        prefix: Prefix for metric names. Defaults to "".
+        threshold: Threshold for converting probabilities to class labels. Defaults to 0.5.
+        val_metrics: List of metric names to include. If None, defaults to ["val_accuracy", "val_mean_prediction"].
+
+    Returns:
+        dict[str, torchmetrics.Metric]: Dictionary mapping metric names to metric objects.
+    """
+    if val_metrics is None:
+        val_metrics = [f"{prefix}_accuracy", f"{prefix}_mean_prediction"]
+
+    # Initialize all possible metrics
+    all_metrics = {
+        f"{prefix}_accuracy": classification.BinaryAccuracy(
             threshold=threshold,
         ).to(device),
-        f"{prefix}_precision": torchmetrics.classification.BinaryPrecision(
+        f"{prefix}_precision": classification.BinaryPrecision(
             threshold=threshold,
         ).to(device),
-        f"{prefix}_recall": torchmetrics.classification.BinaryRecall(
+        f"{prefix}_recall": classification.BinaryRecall(
             threshold=threshold,
         ).to(device),
-        f"{prefix}_f1": torchmetrics.classification.BinaryF1Score(
-            threshold=threshold,
+        f"{prefix}_f1": classification.BinaryF1Score(
+            threshold=threshold
         ).to(device),
+        f"{prefix}_mean_prediction": MeanPrediction().to(device),
     }
 
+    # Filter metrics based on val_metrics list
+    if prefix == "val":
+        return {
+            metric_name: metric_obj
+            for metric_name, metric_obj in all_metrics.items()
+            if metric_name in val_metrics
+        }
+    return all_metrics
 
 # -------------------------------------------------------------------
 # Train one Fold Function
@@ -227,7 +297,6 @@ def _train_fold(
     val_dataset: data_pipeline.CryptoDataSet,
     config: dict,
     logger_: logger.Logger,
-    threshold:float,
 ) -> None:
     """Read data and train the model with hyperparameter tuning.
 
@@ -299,11 +368,19 @@ def _train_fold(
         # ---------------------------
         # 3. Training Loop
         # ---------------------------
-        best_val_loss, best_val_f1 = float("inf"), 0.0
+        best_val_loss, best_val_accuracy = float("inf"), 0.0
         patience = 5
         no_improvement_epochs = 0
-        train_metric_functions = get_metric_functions(device, "train", threshold)
-        val_metric_functions = get_metric_functions(device, "val", threshold)
+        train_metric_functions = get_metric_objects(
+            device,
+            "train",
+            config["threshold"],
+        )
+        val_metric_functions = get_metric_objects(
+            device,
+            "val",
+            config["threshold"],
+        )
         for _ in range(config.epochs):
             train_loss, train_metrics = _train_one_epoch(
                 model,
@@ -324,7 +401,6 @@ def _train_fold(
             # Log metrics to wandb
             wandb.log(
                 {
-                    "val_coin": config["val_coin"],
                     "train_loss": train_loss,
                     "val_loss": val_loss,
                     **train_metrics,
@@ -334,10 +410,10 @@ def _train_fold(
 
             # Save best model (optional)
             if (val_loss < best_val_loss) and (
-                val_metrics["val_f1"] > best_val_f1
+                val_metrics["val_accuracy"] > best_val_accuracy
             ):
                 best_val_loss = val_loss
-                best_val_f1 = val_metrics["val_f1"]
+                best_val_accuracy = val_metrics["val_accuracy"]
                 no_improvement_epochs = 0
 
                 # Convert all config values to strings
@@ -360,11 +436,12 @@ def train_model(config: dict | None = None) -> None:
             "epochs": 10,
             "batch_size": 8,
             "lr": 0.001,
-            "hidden_size": 32,
+            "hidden_size": 128,
             "num_layers": 2,
             "dropout": 0.2,
             "n_cutoff_points": 1,
             "n_groups_cutoff_points": 1,
+            "threshold": 0.5,
         }
 
     # Read data from data pipeline
