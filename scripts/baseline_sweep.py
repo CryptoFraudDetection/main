@@ -22,7 +22,7 @@ sweep_config = {
         "weight_decay": {"values": [0.0, 1e-5, 1e-4]},
         # Fixed parameters
         "epochs": {"value": 50},
-        "patience": 20,
+        "patience": {"value": 20},
         "n_cutoff_points": {"value": 50},
         "n_groups_cutoff_points": {"value": 10},
         "threshold": {"value": 0.5},
