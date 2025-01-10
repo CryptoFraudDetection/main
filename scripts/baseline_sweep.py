@@ -14,10 +14,10 @@ sweep_config = {
     },
     "parameters": {
         # All parameters from baseline model's default config
-        "lr": {"distribution": "uniform", "min": 0.0001, "max": 0.01},
-        "hidden_size": {"values": [32, 64, 128, 256, 512]},
+        "lr": {"values": [0.0001, 0.0004, 0.0016, 0.0064]},
+        "hidden_size": {"values": [16, 32, 64, 128]},
         "num_layers": {"values": [1, 2, 4]},
-        "dropout": {"distribution": "uniform", "min": 0.0, "max": 0.5},
+        "dropout": {"values": [0.0, 0.2, 0.4, 0.6, 0.8]},
         # Fixed parameters
         "batch_size": {"value": 8},
         "epochs": {"value": 50},
