@@ -22,9 +22,6 @@ _LOGGER = logger.Logger(
 )
 
 
-# -------------------------------------------------------------------
-# Basline LSTM Classification Model
-# -------------------------------------------------------------------
 class _LSTMClassifier(nn.Module):
     def __init__(
         self,
@@ -73,9 +70,6 @@ class _LSTMClassifier(nn.Module):
         return self.sigmoid(logits).squeeze(-1)
 
 
-# -------------------------------------------------------------------
-# Training loop
-# -------------------------------------------------------------------
 def _train_one_epoch(
     model: nn.Module,
     train_loader: DataLoader,
@@ -259,6 +253,7 @@ def get_metric_objects(
 
     Returns:
         dict[str, torchmetrics.Metric]: Dictionary mapping metric names to metric objects.
+
     """
     if val_metrics is None:
         val_metrics = [f"{prefix}_accuracy", f"{prefix}_mean_prediction"]
@@ -274,9 +269,9 @@ def get_metric_objects(
         f"{prefix}_recall": classification.BinaryRecall(
             threshold=threshold,
         ).to(device),
-        f"{prefix}_f1": classification.BinaryF1Score(
-            threshold=threshold
-        ).to(device),
+        f"{prefix}_f1": classification.BinaryF1Score(threshold=threshold).to(
+            device,
+        ),
         f"{prefix}_mean_prediction": MeanPrediction().to(device),
     }
 
@@ -289,42 +284,28 @@ def get_metric_objects(
         }
     return all_metrics
 
-# -------------------------------------------------------------------
-# Train one Fold Function
-# -------------------------------------------------------------------
+
 def _train_fold(
     train_dataset: data_pipeline.CryptoDataSet,
     val_dataset: data_pipeline.CryptoDataSet,
     config: dict,
     logger_: logger.Logger,
+    project: str,
 ) -> None:
-    """Read data and train the model with hyperparameter tuning.
-
-    This function will be invoked by `wandb.agent(...)` for each set of
-    hyperparameters. It performs training and evaluation, logging metrics to
-    Weights & Biases.
+    """Train model with hyperparameter tuning and log to Weights & Biases.
 
     Args:
-        config (Optional[dict]): A dictionary containing hyperparameters and training configurations.
-            Keys may include:
-            - 'val_coin' (str): Coin which is left out for this fold.
-            - 'epochs' (int): Number of training epochs.
-            - 'batch_size' (int): Batch size for training.
-            - 'lr' (float): Learning rate for the optimizer.
-            - 'hidden_size' (int): Number of hidden units in the LSTM.
-            - 'num_layers' (int): Number of LSTM layers.
-            - 'dropout' (float): Dropout rate for regularization.
-            - 'n_cutoff_points' (int): Number of cutoff points for sequence segmentation.
-            - 'n_groups_cutoff_points' (int): Number of groups for cutoff points.
+        train_dataset: Training dataset
+        val_dataset: Validation dataset
+        config: Hyperparameters and training configurations
+        logger_: Logger instance
+        project: Name of the W&B project
 
     """
-    with wandb.init(config=config):
+    with wandb.init(project=project, config=config):
         config = wandb.config
         run_dir = Path(wandb.run.dir)
 
-        # ---------------------------
-        # 1. Prepare Data
-        # ---------------------------
         if torch.backends.mps.is_available():
             device = torch.device("mps")
         elif torch.cuda.is_available():
@@ -352,9 +333,6 @@ def _train_fold(
         sample_x, _ = train_dataset[0]
         input_size = sample_x.shape[1]  # shape is (seq_len, input_size)
 
-        # ---------------------------
-        # 2. Define Model, Loss, Optimizer
-        # ---------------------------
         model = _LSTMClassifier(
             input_size=input_size,
             hidden_size=config.hidden_size,
@@ -365,9 +343,6 @@ def _train_fold(
         criterion = nn.BCELoss()
         optimizer = optim.Adam(model.parameters(), lr=config.lr)
 
-        # ---------------------------
-        # 3. Training Loop
-        # ---------------------------
         best_val_loss, best_val_accuracy = float("inf"), 0.0
         patience = 5
         no_improvement_epochs = 0
@@ -430,7 +405,17 @@ def _train_fold(
                     break
 
 
-def train_model(config: dict | None = None) -> None:
+def train_model(
+    config: dict | None = None,
+    project: str = "crypto-fraud-detection-baseline",
+) -> None:
+    """Train model with Leave-One-Out Cross Validation.
+
+    Args:
+        config: Model and training configuration. If None, uses default config.
+        project: Name of the W&B project for experiment tracking.
+
+    """
     if config is None:
         config = {
             "epochs": 10,
@@ -449,6 +434,7 @@ def train_model(config: dict | None = None) -> None:
     train_df, _ = crypto_data.load_data()
     train_coins = train_df["coin"].unique()
     _LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
+
     for i, coin in enumerate(train_coins):
         config["val_coin"] = coin
         train_df, val_df = crypto_data.train_val_split(coin)
@@ -466,8 +452,9 @@ def train_model(config: dict | None = None) -> None:
             n_groups_cutoff_points=config["n_groups_cutoff_points"],
         )
 
-        _train_fold(train_dataset, val_dataset, config, _LOGGER)
+        _train_fold(train_dataset, val_dataset, config, _LOGGER, project)
         _LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
+
     _LOGGER.info("All folds are done.")
 
 
