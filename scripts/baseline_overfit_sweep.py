@@ -14,7 +14,7 @@ sweep_config = {
     },
     "parameters": {
         # All parameters from baseline model's default config
-        "lr": {"values": [5e-3]},
+        "lr": {"values": [1e-4]},
         "hidden_size": {"values": [128]},
         "num_layers": {"values": [2]},
         "dropout": {"values": [0.0]},
