@@ -341,7 +341,9 @@ def _train_fold(
         ).to(device)
 
         criterion = nn.BCELoss()
-        optimizer = optim.Adam(model.parameters(), lr=config.lr)
+        optimizer = optim.Adam(
+            model.parameters(), lr=config.lr, weight_decay=config.weight_decay,
+        )
 
         best_val_loss, best_val_accuracy = float("inf"), 0.0
         no_improvement_epochs = 0
@@ -427,6 +429,7 @@ def train_model(
             "n_groups_cutoff_points": 10,
             "threshold": 0.5,
             "patience": 20,
+            "weight_decay": 0.0,
         }
 
     # Read data from data pipeline

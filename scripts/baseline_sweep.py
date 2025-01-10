@@ -19,6 +19,7 @@ sweep_config = {
         "num_layers": {"values": [1, 2]},
         "dropout": {"values": [0.0, 0.2, 0.5]},
         "batch_size": {"values": [8, 16, 32]},
+        "weight_decay": {"values": [0.0, 1e-5, 1e-4]},
         # Fixed parameters
         "epochs": {"value": 50},
         "n_cutoff_points": {"value": 100},
