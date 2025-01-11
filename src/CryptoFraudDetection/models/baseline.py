@@ -291,7 +291,7 @@ def _train_fold(
     config: dict,
     logger_: logger.Logger,
     project: str,
-    coin: str,
+    wandb_name: str,
 ) -> None:
     """Train model with hyperparameter tuning and log to Weights & Biases.
 
@@ -303,7 +303,7 @@ def _train_fold(
         project: Name of the W&B project
 
     """
-    with wandb.init(project=project, config=config, name=f"fold_{coin}"):
+    with wandb.init(project=project, config=config, name=wandb_name):
         config = wandb.config
         run_dir = Path(wandb.run.dir)
 
@@ -444,7 +444,7 @@ def train_model(
             wandb_config,
             _LOGGER,
             wandb_project,
-            coin,
+            f"{i}_{coin}",
         )
         _LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
 
