@@ -371,120 +371,73 @@ def _train_fold(
     return stats
 
 
-def _calculate_balanced_score(scam_acc: float, non_scam_acc: float) -> float:
-    """Calculate balanced score using harmonic mean."""
-    if scam_acc <= 0 or non_scam_acc <= 0:
-        return 0.0
-    return 2.0 * scam_acc * non_scam_acc / (scam_acc + non_scam_acc)
-
-
-def _calculate_epoch_means(all_fold_stats: list, coin_info: dict) -> dict:
-    """Calculate mean metrics per epoch across all folds."""
-    epoch_groups = {}
-
-    # Group stats by epoch
-    for fold_stats in all_fold_stats:
-        for stat in fold_stats:
-            epoch = stat["epoch"]
-            if epoch not in epoch_groups:
-                epoch_groups[epoch] = {
-                    "scam": {"train": [], "val": []},
-                    "non_scam": {"train": [], "val": []},
-                }
-
-            # Determine if coin is scam
-            is_scam = bool(coin_info.get(stat["coin"]))
-            group = "scam" if is_scam else "non_scam"
-
-            # Collect accuracies
-            epoch_groups[epoch][group]["train"].append(stat["train_accuracy"])
-            epoch_groups[epoch][group]["val"].append(stat["val_accuracy"])
-
-    # Calculate means and balanced scores for each epoch
-    epoch_means = {}
-    for epoch, groups in epoch_groups.items():
-        # Calculate mean accuracies for each group
-        scam_train_acc = (
-            float(np.mean(groups["scam"]["train"]))
-            if groups["scam"]["train"]
-            else 0.0
-        )
-        non_scam_train_acc = (
-            float(np.mean(groups["non_scam"]["train"]))
-            if groups["non_scam"]["train"]
-            else 0.0
-        )
-        scam_val_acc = (
-            float(np.mean(groups["scam"]["val"]))
-            if groups["scam"]["val"]
-            else 0.0
-        )
-        non_scam_val_acc = (
-            float(np.mean(groups["non_scam"]["val"]))
-            if groups["non_scam"]["val"]
-            else 0.0
-        )
-
-        # Calculate balanced scores
-        train_balanced = _calculate_balanced_score(
-            scam_train_acc,
-            non_scam_train_acc,
-        )
-        val_balanced = _calculate_balanced_score(
-            scam_val_acc,
-            non_scam_val_acc,
-        )
-
-        epoch_means[epoch] = {
-            "epoch": epoch,
-            "mean_train_balanced_score": train_balanced,
-            "mean_val_balanced_score": val_balanced,
-            "mean_train_acc_scam": scam_train_acc,
-            "mean_train_acc_non_scam": non_scam_train_acc,
-            "mean_val_acc_scam": scam_val_acc,
-            "mean_val_acc_non_scam": non_scam_val_acc,
-            "active_folds_scam": len(groups["scam"]["val"]),
-            "active_folds_non_scam": len(groups["non_scam"]["val"]),
-        }
-
-    return epoch_means
-
-
-def _prepare_wandb_log(
-    epoch_stat: dict,
-    coin: str,
-    train_metrics: dict,
-    val_metrics: dict,
+def _aggregate_metrics(
+    all_fold_stats: list[dict],
+    epoch: int,
+    coin_info: dict,
 ) -> dict:
-    """Prepare metrics for W&B logging.
+    """Aggregate metrics from all folds for a single epoch.
 
     Args:
-        epoch_stat: Dictionary containing all metrics for current epoch
-        coin: Current coin being processed
-        train_metrics: Dictionary of training metric functions
-        val_metrics: Dictionary of validation metric functions
+        all_fold_stats: List of dictionaries containing fold statistics
+        epoch: Current epoch number
+        coin_info: Dictionary mapping coins to their scam status
 
     Returns:
-        Dictionary formatted for W&B logging
+        Dictionary containing aggregated metrics for the epoch
 
     """
-    # Start with basic metrics
-    log_dict = {
-        "epoch": epoch_stat["epoch"],
-        f"fold_{coin}/train_loss": epoch_stat["train_loss"],
-        f"fold_{coin}/val_loss": epoch_stat["val_loss"],
-    }
+    # Filter stats for current epoch
+    epoch_stats = [
+        stat
+        for stats in all_fold_stats
+        for stat in stats
+        if stat["epoch"] == epoch
+    ]
 
-    # Add metrics from both training and validation
-    for metric_name in train_metrics:
-        if metric_name in epoch_stat:
-            log_dict[f"fold_{coin}/{metric_name}"] = epoch_stat[metric_name]
+    # Collect metrics per fold
+    fold_metrics = {}
+    for stat in epoch_stats:
+        coin = stat["coin"]
+        prefix = f"fold_{coin}"
+        # Exclude metadata fields
+        metrics = {
+            f"{prefix}/{k}": v
+            for k, v in stat.items()
+            if k not in ["epoch", "fold", "coin"]
+        }
+        fold_metrics.update(metrics)
 
-    for metric_name in val_metrics:
-        if metric_name in epoch_stat:
-            log_dict[f"fold_{coin}/{metric_name}"] = epoch_stat[metric_name]
+    # Calculate mean metrics
+    metric_keys = [
+        k for k in epoch_stats[0].keys() if k not in ["epoch", "fold", "coin"]
+    ]
+    mean_metrics = {}
 
-    return log_dict
+    # Overall means
+    for key in metric_keys:
+        values = [stat[key] for stat in epoch_stats]
+        mean_metrics[f"mean_{key}"] = np.mean(values)
+
+    # Scam/non-scam means
+    scam_stats = [
+        stat for stat in epoch_stats if bool(coin_info.get(stat["coin"]))
+    ]
+    non_scam_stats = [
+        stat for stat in epoch_stats if not bool(coin_info.get(stat["coin"]))
+    ]
+
+    for key in metric_keys:
+        if scam_stats:
+            mean_metrics[f"mean_{key}_scam"] = np.mean(
+                [stat[key] for stat in scam_stats],
+            )
+        if non_scam_stats:
+            mean_metrics[f"mean_{key}_non_scam"] = np.mean(
+                [stat[key] for stat in non_scam_stats],
+            )
+
+    return {**fold_metrics, **mean_metrics}
 
 
 def train_model(
@@ -565,40 +518,14 @@ def train_model(
         )
         all_fold_stats.append(fold_stats)
 
-        # In train_model, replace the logging section with:
-        for epoch_stat in fold_stats:
-            log_dict = _prepare_wandb_log(
-                epoch_stat,
-                coin,
-                train_metric_functions,
-                val_metric_functions,
-            )
-            wandb.log(log_dict)
-
-        # Log stats as table
-        fold_stats_table = wandb.Table(
-            dataframe=pd.DataFrame(fold_stats),
-            columns=fold_stats[0].keys(),
-        )
-        wandb.log({f"fold_{i+1}_{coin}_stats": fold_stats_table})
-
         best_val_accurcay = max(stat["val_accuracy"] for stat in fold_stats)
         _LOGGER.info(
             f"Fold {i+1}/{len(train_coins)} coin={coin} done. Val acc={best_val_accurcay:.3f}",
         )
 
-    # Log mean training stats
-    epoch_means = _calculate_epoch_means(all_fold_stats, coin_info)
-    for means in epoch_means.values():
-        wandb.log(means)  # wandb automatically handles the epoch counter
-
-    # Flatten only for the table
-    flat_stats = [stat for fold in all_fold_stats for stat in fold]
-    all_stats_table = wandb.Table(
-        dataframe=pd.DataFrame(flat_stats),
-        columns=flat_stats[0].keys(),
-    )
-    wandb.log({"all_training_stats": all_stats_table})
+    for epoch in range(wandb_config.epochs):
+        metrics = _aggregate_metrics(all_fold_stats, epoch, coin_info)
+        wandb.log(metrics, step=epoch)
 
     wandb.finish()
 
