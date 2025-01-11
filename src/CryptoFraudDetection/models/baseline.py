@@ -242,7 +242,6 @@ def get_metric_objects(
     device: torch.device,
     prefix: str = "",
     threshold: float = 0.5,
-    tp_values_expected: bool = False,
 ) -> dict[str, torchmetrics.Metric]:
     """Initialize binary classification metrics.
 
@@ -274,7 +273,7 @@ def get_metric_objects(
     }
 
     # Filter metrics based on val_metrics list
-    if prefix == "val" and tp_values_expected:
+    if prefix == "val":
         return {
             metric_name: metric_obj
             for metric_name, metric_obj in all_metrics.items()
@@ -451,6 +450,43 @@ def _calculate_epoch_means(all_fold_stats: list, coin_info: dict) -> dict:
     return epoch_means
 
 
+def _prepare_wandb_log(
+    epoch_stat: dict,
+    coin: str,
+    train_metrics: dict,
+    val_metrics: dict,
+) -> dict:
+    """Prepare metrics for W&B logging.
+
+    Args:
+        epoch_stat: Dictionary containing all metrics for current epoch
+        coin: Current coin being processed
+        train_metrics: Dictionary of training metric functions
+        val_metrics: Dictionary of validation metric functions
+
+    Returns:
+        Dictionary formatted for W&B logging
+
+    """
+    # Start with basic metrics
+    log_dict = {
+        "epoch": epoch_stat["epoch"],
+        f"fold_{coin}/train_loss": epoch_stat["train_loss"],
+        f"fold_{coin}/val_loss": epoch_stat["val_loss"],
+    }
+
+    # Add metrics from both training and validation
+    for metric_name in train_metrics:
+        if metric_name in epoch_stat:
+            log_dict[f"fold_{coin}/{metric_name}"] = epoch_stat[metric_name]
+
+    for metric_name in val_metrics:
+        if metric_name in epoch_stat:
+            log_dict[f"fold_{coin}/{metric_name}"] = epoch_stat[metric_name]
+
+    return log_dict
+
+
 def train_model(
     wandb_config: wandb.Config,
     wandb_project: str,
@@ -491,7 +527,6 @@ def train_model(
         device,
         "val",
         metric_config["threshold"],
-        tp_values_expected=overfit_test,
     )
 
     all_fold_stats = []
@@ -501,7 +536,6 @@ def train_model(
 
         if overfit_test:
             dataset_config["n_time_steps"] = 5
-            val_df = train_df.copy()
         train_dataset = data_pipeline.CryptoDataSet(
             df=train_df,
             logger_=_LOGGER,
@@ -531,6 +565,17 @@ def train_model(
         )
         all_fold_stats.append(fold_stats)
 
+        # In train_model, replace the logging section with:
+        for epoch_stat in fold_stats:
+            log_dict = _prepare_wandb_log(
+                epoch_stat,
+                coin,
+                train_metric_functions,
+                val_metric_functions,
+            )
+            wandb.log(log_dict)
+
+        # Log stats as table
         fold_stats_table = wandb.Table(
             dataframe=pd.DataFrame(fold_stats),
             columns=fold_stats[0].keys(),
@@ -542,9 +587,7 @@ def train_model(
             f"Fold {i+1}/{len(train_coins)} coin={coin} done. Val acc={best_val_accurcay:.3f}",
         )
 
-    _LOGGER.info("All folds are done.")
-
-    # Log overall training stats
+    # Log mean training stats
     epoch_means = _calculate_epoch_means(all_fold_stats, coin_info)
     for means in epoch_means.values():
         wandb.log(means)  # wandb automatically handles the epoch counter
