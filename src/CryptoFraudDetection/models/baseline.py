@@ -427,7 +427,6 @@ def train_model(
     _LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
 
     for i, coin in enumerate(train_coins):
-        config["val_coin"] = coin
         train_df, val_df = crypto_data.train_val_split(coin)
 
         train_dataset = data_pipeline.CryptoDataSet(
