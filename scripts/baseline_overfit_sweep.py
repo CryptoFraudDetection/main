@@ -21,7 +21,7 @@ sweep_config = {
         "batch_size": {"values": [64]},
         "weight_decay": {"values": [0.0]},
         # Fixed parameters
-        "epochs": {"value": 1000},
+        "epochs": {"value": 100},
         "patience": {"value": 100},
         "threshold": {"value": 0.5},
     },
