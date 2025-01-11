@@ -338,8 +338,8 @@ class CryptoDataSet(data.Dataset):
         self,
         df: pd.DataFrame,
         logger_: logger.Logger,
-        n_cutoff_points: int = 100,
-        n_groups_cutoff_points: int = 10,
+        n_cutoff_points: int,
+        n_groups_cutoff_points,
         n_time_steps: int | None = None,
         embedding_columns=("twitter_embedding", "reddit_embedding"),
     ):
