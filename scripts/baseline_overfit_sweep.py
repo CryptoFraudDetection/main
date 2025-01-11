@@ -24,10 +24,12 @@ sweep_config = {
         "epochs": {"value": 1000},
         "patience": {"value": 100},
         "threshold": {"value": 0.5},
-        "n_cutoff_points": {"value": 1},
-        "n_groups_cutoff_points": {"value": 1},
-        "n_time_steps": {"value": 5},
     },
+}
+dataset_config = {
+    "n_cutoff_points": 1,
+    "n_groups_cutoff_points": 1,
+    "n_time_steps": 5,
 }
 
 ENTITY = "nod0ndel"
@@ -60,7 +62,11 @@ def main():
     # Start agent with configured project name
     wandb.agent(
         sweep_id,
-        function=lambda: train_model(config=wandb.config, project=PROJECT),
+        function=lambda: train_model(
+            wandb_config=wandb.config,
+            wandb_project=PROJECT,
+            dataset_config=dataset_config,
+        ),
     )
 
 

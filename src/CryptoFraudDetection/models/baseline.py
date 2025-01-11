@@ -291,7 +291,7 @@ def _train_fold(
     config: dict,
     logger_: logger.Logger,
     project: str,
-    coin:str,
+    coin: str,
 ) -> None:
     """Train model with hyperparameter tuning and log to Weights & Biases.
 
@@ -410,14 +410,16 @@ def _train_fold(
 
 
 def train_model(
-    config: wandb.Config,
-    project: str = "crypto-fraud-detection-baseline",
+    wandb_config: wandb.Config,
+    wandb_project: str,
+    dataset_config: dict,
 ) -> None:
     """Train model with Leave-One-Out Cross Validation.
 
     Args:
         config: Model and training configuration.
         project: Name of the W&B project for experiment tracking.
+        dataset_config: config for dataset creation.
 
     """
     # Read data from data pipeline
@@ -430,21 +432,20 @@ def train_model(
         train_df, val_df = crypto_data.train_val_split(coin)
 
         train_dataset = data_pipeline.CryptoDataSet(
-            df=train_df,
-            logger_=_LOGGER,
-            n_cutoff_points=config.n_cutoff_points,
-            n_groups_cutoff_points=config.n_groups_cutoff_points,
-            n_time_steps=config.get("n_time_steps"),
+            df=train_df, logger_=_LOGGER, **dataset_config,
         )
         val_dataset = data_pipeline.CryptoDataSet(
-            df=val_df,
-            logger_=_LOGGER,
-            n_cutoff_points=config.n_cutoff_points,
-            n_groups_cutoff_points=config.n_groups_cutoff_points,
-            n_time_steps=config.get("n_time_steps"),
+            df=val_df, logger_=_LOGGER, **dataset_config,
         )
 
-        _train_fold(train_dataset, val_dataset, config, _LOGGER, project, coin)
+        _train_fold(
+            train_dataset,
+            val_dataset,
+            wandb_config,
+            _LOGGER,
+            wandb_project,
+            coin,
+        )
         _LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
 
     _LOGGER.info("All folds are done.")
