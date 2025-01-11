@@ -293,7 +293,6 @@ def _train_fold(
     train_metric_functions: dict[str, torchmetrics.Metric],
     val_metric_functions: dict[str, torchmetrics.Metric],
     fold_info: dict,
-    save_best_model: bool = False,
 ) -> None:
     """Train model with hyperparameter tuning and log to Weights & Biases.
 
@@ -306,7 +305,6 @@ def _train_fold(
         train_metric_functions: Dictionary of training metric functions
         val_metric_functions: Dictionary of validation metric functions
         fold_info: Dictionary containing fold metadata (coin, fold_number)
-        save_best_model: Save the best model if True
 
     """
     train_loader = DataLoader(
@@ -343,9 +341,6 @@ def _train_fold(
         weight_decay=wandb_config.weight_decay,
     )
 
-    best_val_loss, best_val_accuracy = float("inf"), 0.0
-    no_improvement_epochs = 0
-
     stats = []
     for epoch in range(wandb_config.epochs):
         train_loss, train_metrics = _train_one_epoch(
@@ -374,52 +369,83 @@ def _train_fold(
         }
         stats.append(epoch_stats)
 
-    return best_val_accuracy, stats
+    return stats
 
 
-def _calculate_epoch_means(all_fold_stats: list) -> dict:
-    """Calculate mean metrics per epoch across all folds.
+def _calculate_balanced_score(scam_acc: float, non_scam_acc: float) -> float:
+    """Calculate balanced score using harmonic mean."""
+    if scam_acc <= 0 or non_scam_acc <= 0:
+        return 0.0
+    return 2.0 * scam_acc * non_scam_acc / (scam_acc + non_scam_acc)
 
-    Args:
-        all_fold_stats: List of lists, where each inner list contains stats for one fold
 
-    Returns:
-        Dictionary with mean metrics per epoch
-
-    """
-    # Group stats by epoch
+def _calculate_epoch_means(all_fold_stats: list, coin_info: dict) -> dict:
+    """Calculate mean metrics per epoch across all folds."""
     epoch_groups = {}
-    for (
-        fold_stats
-    ) in all_fold_stats:  # fold_stats is already a list of epochs for one fold
+
+    # Group stats by epoch
+    for fold_stats in all_fold_stats:
         for stat in fold_stats:
             epoch = stat["epoch"]
             if epoch not in epoch_groups:
-                epoch_groups[epoch] = []
-            epoch_groups[epoch].append(
-                {
-                    "train_loss": stat["train_loss"],
-                    "val_loss": stat["val_loss"],
-                    "train_accuracy": stat["train_accuracy"],
-                    "val_accuracy": stat["val_accuracy"],
-                },
-            )
+                epoch_groups[epoch] = {
+                    "scam": {"train": [], "val": []},
+                    "non_scam": {"train": [], "val": []},
+                }
 
-    # Calculate means for each epoch
+            # Determine if coin is scam
+            is_scam = bool(coin_info.get(stat["coin"]))
+            group = "scam" if is_scam else "non_scam"
+
+            # Collect accuracies
+            epoch_groups[epoch][group]["train"].append(stat["train_accuracy"])
+            epoch_groups[epoch][group]["val"].append(stat["val_accuracy"])
+
+    # Calculate means and balanced scores for each epoch
     epoch_means = {}
-    for epoch, stats in epoch_groups.items():
+    for epoch, groups in epoch_groups.items():
+        # Calculate mean accuracies for each group
+        scam_train_acc = (
+            float(np.mean(groups["scam"]["train"]))
+            if groups["scam"]["train"]
+            else 0.0
+        )
+        non_scam_train_acc = (
+            float(np.mean(groups["non_scam"]["train"]))
+            if groups["non_scam"]["train"]
+            else 0.0
+        )
+        scam_val_acc = (
+            float(np.mean(groups["scam"]["val"]))
+            if groups["scam"]["val"]
+            else 0.0
+        )
+        non_scam_val_acc = (
+            float(np.mean(groups["non_scam"]["val"]))
+            if groups["non_scam"]["val"]
+            else 0.0
+        )
+
+        # Calculate balanced scores
+        train_balanced = _calculate_balanced_score(
+            scam_train_acc,
+            non_scam_train_acc,
+        )
+        val_balanced = _calculate_balanced_score(
+            scam_val_acc,
+            non_scam_val_acc,
+        )
+
         epoch_means[epoch] = {
-            "mean_train_loss": float(
-                np.mean([s["train_loss"] for s in stats]),
-            ),
-            "mean_val_loss": float(np.mean([s["val_loss"] for s in stats])),
-            "mean_train_accuracy": float(
-                np.mean([s["train_accuracy"] for s in stats]),
-            ),
-            "mean_val_accuracy": float(
-                np.mean([s["val_accuracy"] for s in stats]),
-            ),
-            "active_folds": len(stats),
+            "epoch": epoch,
+            "mean_train_balanced_score": train_balanced,
+            "mean_val_balanced_score": val_balanced,
+            "mean_train_acc_scam": scam_train_acc,
+            "mean_train_acc_non_scam": non_scam_train_acc,
+            "mean_val_acc_scam": scam_val_acc,
+            "mean_val_acc_non_scam": non_scam_val_acc,
+            "active_folds_scam": len(groups["scam"]["val"]),
+            "active_folds_non_scam": len(groups["non_scam"]["val"]),
         }
 
     return epoch_means
@@ -469,10 +495,7 @@ def train_model(
     )
 
     all_fold_stats = []
-    fold_val_accuracies = []
     coin_info = {c["symbol"]: c for c in crypto_data.coin_info}
-    scam_fold_val_accuracies = []
-    non_scams_fold_val_accuracies = []
     for i, coin in enumerate(train_coins):
         train_df, val_df = crypto_data.train_val_split(coin)
 
@@ -496,7 +519,7 @@ def train_model(
             "is_scam": bool(coin_info.get(coin)),
         }
 
-        best_val_accurcay, fold_stats = _train_fold(
+        fold_stats = _train_fold(
             train_dataset=train_dataset,
             val_dataset=val_dataset,
             wandb_config=wandb_config,
@@ -507,7 +530,6 @@ def train_model(
             fold_info=fold_info,
         )
         all_fold_stats.append(fold_stats)
-        fold_val_accuracies.append(best_val_accurcay)
 
         fold_stats_table = wandb.Table(
             dataframe=pd.DataFrame(fold_stats),
@@ -515,60 +537,23 @@ def train_model(
         )
         wandb.log({f"fold_{i+1}_{coin}_stats": fold_stats_table})
 
-        if coin_info.get(coin):
-            scam_fold_val_accuracies.append(best_val_accurcay)
-        else:
-            non_scams_fold_val_accuracies.append(best_val_accurcay)
-
+        best_val_accurcay = max(stat["val_accuracy"] for stat in fold_stats)
         _LOGGER.info(
             f"Fold {i+1}/{len(train_coins)} coin={coin} done. Val acc={best_val_accurcay:.3f}",
         )
 
     _LOGGER.info("All folds are done.")
 
-    mean_acc_all = (
-        float(np.mean(fold_val_accuracies)) if fold_val_accuracies else 0.0
-    )
-    mean_acc_scam = (
-        float(np.mean(scam_fold_val_accuracies))
-        if scam_fold_val_accuracies
-        else 0.0
-    )
-    mean_acc_non_scam = (
-        float(np.mean(non_scams_fold_val_accuracies))
-        if non_scams_fold_val_accuracies
-        else 0.0
-    )
-
-    if (mean_acc_scam + mean_acc_non_scam) > 0:
-        balanced_score = (
-            2.0
-            * mean_acc_non_scam
-            * mean_acc_scam
-            / (mean_acc_non_scam + mean_acc_scam)
-        )
-    else:
-        balanced_score = 0.0
-
-    wandb.log(
-        {
-            "mean_val_accuracy_all": mean_acc_all,
-            "mean_val_accuracy_scam": mean_acc_scam,
-            "mean_val_accuracy_non_scam": mean_acc_non_scam,
-            "balanced_score": balanced_score,
-        },
-    )
-
     # Log overall training stats
-    epoch_means = _calculate_epoch_means(all_fold_stats)
+    epoch_means = _calculate_epoch_means(all_fold_stats, coin_info)
     for means in epoch_means.values():
-        wandb.log(means)  # wandb will handle the epoch counter automatically
+        wandb.log(means)  # wandb automatically handles the epoch counter
 
     # Flatten only for the table
     flat_stats = [stat for fold in all_fold_stats for stat in fold]
     all_stats_table = wandb.Table(
         dataframe=pd.DataFrame(flat_stats),
-        columns=flat_stats[0].keys()
+        columns=flat_stats[0].keys(),
     )
     wandb.log({"all_training_stats": all_stats_table})
 
