@@ -410,13 +410,13 @@ def _train_fold(
 
 
 def train_model(
-    config: dict,
+    config: wandb.Config,
     project: str = "crypto-fraud-detection-baseline",
 ) -> None:
     """Train model with Leave-One-Out Cross Validation.
 
     Args:
-        config: Model and training configuration. If None, uses default config.
+        config: Model and training configuration.
         project: Name of the W&B project for experiment tracking.
 
     """
@@ -432,15 +432,15 @@ def train_model(
         train_dataset = data_pipeline.CryptoDataSet(
             df=train_df,
             logger_=_LOGGER,
-            n_cutoff_points=config["n_cutoff_points"],
-            n_groups_cutoff_points=config["n_groups_cutoff_points"],
+            n_cutoff_points=config.n_cutoff_points,
+            n_groups_cutoff_points=config.n_groups_cutoff_points,
             n_time_steps=config.get("n_time_steps"),
         )
         val_dataset = data_pipeline.CryptoDataSet(
             df=val_df,
             logger_=_LOGGER,
-            n_cutoff_points=config["n_cutoff_points"],
-            n_groups_cutoff_points=config["n_groups_cutoff_points"],
+            n_cutoff_points=config.n_cutoff_points,
+            n_groups_cutoff_points=config.n_groups_cutoff_points,
             n_time_steps=config.get("n_time_steps"),
         )
 
