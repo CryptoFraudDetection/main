@@ -58,7 +58,10 @@ def main():
         )
 
     # Start agent with configured project name
-    wandb.agent(sweep_id, function=lambda: train_model(project=PROJECT))
+    wandb.agent(
+        sweep_id,
+        function=lambda: train_model(config=wandb.config, project=PROJECT),
+    )
 
 
 if __name__ == "__main__":
