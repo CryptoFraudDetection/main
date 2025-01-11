@@ -340,13 +340,26 @@ class CryptoDataSet(data.Dataset):
         logger_: logger.Logger,
         n_cutoff_points: int = 100,
         n_groups_cutoff_points: int = 10,
+        n_time_steps: int | None = None,
         embedding_columns=("twitter_embedding", "reddit_embedding"),
     ):
+        """Initialize dataset.
+
+        Args:
+            df: Input DataFrame with time series data
+            logger_: Logger instance
+            n_cutoff_points: Number of cutoff points to generate
+            n_groups_cutoff_points: Number of groups to distribute cutoff points
+            n_time_steps: If set, only use this many most recent time steps
+            embedding_columns: Column names containing embeddings
+
+        """
         self._logger = logger_
         self.df = df.copy()
         self._n_cutoff_points = n_cutoff_points
         self._n_groups_cutoff_points = n_groups_cutoff_points
         self._embedding_columns = embedding_columns
+        self._n_time_steps = n_time_steps
 
         self._merge_features()
         self._cutoff_points_all_coins()
@@ -462,6 +475,10 @@ class CryptoDataSet(data.Dataset):
             self._logger.error(
                 f"No data matched the filter coin: '{coin}' & date < '{cutoff_point}'",
             )
+
+        # Take only the most recent n_time_steps if specified
+        if self._n_time_steps is not None:
+            filtered_df = filtered_df.iloc[-self._n_time_steps :]
 
         # Get features 2d-array
         x = np.array(filtered_df["merged_features"].tolist(), dtype=np.float32)

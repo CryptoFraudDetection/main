@@ -447,12 +447,14 @@ def train_model(
             logger_=_LOGGER,
             n_cutoff_points=config["n_cutoff_points"],
             n_groups_cutoff_points=config["n_groups_cutoff_points"],
+            n_time_steps=config.get("n_time_steps"),
         )
         val_dataset = data_pipeline.CryptoDataSet(
             df=val_df,
             logger_=_LOGGER,
             n_cutoff_points=config["n_cutoff_points"],
             n_groups_cutoff_points=config["n_groups_cutoff_points"],
+            n_time_steps=config.get("n_time_steps"),
         )
 
         _train_fold(train_dataset, val_dataset, config, _LOGGER, project)

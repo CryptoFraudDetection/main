@@ -23,9 +23,10 @@ sweep_config = {
         # Fixed parameters
         "epochs": {"value": 1000},
         "patience": {"value": 100},
+        "threshold": {"value": 0.5},
         "n_cutoff_points": {"value": 1},
         "n_groups_cutoff_points": {"value": 1},
-        "threshold": {"value": 0.5},
+        "n_time_steps": {"value": 5},
     },
 }
 
