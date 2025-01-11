@@ -318,7 +318,7 @@ def _train_fold(
             train_dataset,
             batch_size=config.batch_size,
             shuffle=True,
-            drop_last=True,
+            drop_last=False,
             collate_fn=collate_fn,
         )
         val_loader = DataLoader(
