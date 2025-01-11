@@ -15,10 +15,10 @@ sweep_config = {
     "parameters": {
         # All parameters from baseline model's default config
         "lr": {"values": [1e-4]},
-        "hidden_size": {"values": [128]},
+        "hidden_size": {"values": [32]},
         "num_layers": {"values": [2]},
         "dropout": {"values": [0.0]},
-        "batch_size": {"values": [16]},
+        "batch_size": {"values": [64]},
         "weight_decay": {"values": [0.0]},
         # Fixed parameters
         "epochs": {"value": 1000},
