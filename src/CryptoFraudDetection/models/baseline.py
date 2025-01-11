@@ -342,7 +342,9 @@ def _train_fold(
 
         criterion = nn.BCELoss()
         optimizer = optim.Adam(
-            model.parameters(), lr=config.lr, weight_decay=config.weight_decay,
+            model.parameters(),
+            lr=config.lr,
+            weight_decay=config.weight_decay,
         )
 
         best_val_loss, best_val_accuracy = float("inf"), 0.0
@@ -407,7 +409,7 @@ def _train_fold(
 
 
 def train_model(
-    config: dict ,
+    config: dict,
     project: str = "crypto-fraud-detection-baseline",
 ) -> None:
     """Train model with Leave-One-Out Cross Validation.
@@ -417,7 +419,6 @@ def train_model(
         project: Name of the W&B project for experiment tracking.
 
     """
-
     # Read data from data pipeline
     crypto_data = data_pipeline.CryptoData(_LOGGER, Path("data"))
     train_df, _ = crypto_data.load_data()
