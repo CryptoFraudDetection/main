@@ -407,7 +407,7 @@ def _train_fold(
 
 
 def train_model(
-    config: dict | None = None,
+    config: dict ,
     project: str = "crypto-fraud-detection-baseline",
 ) -> None:
     """Train model with Leave-One-Out Cross Validation.
@@ -417,20 +417,6 @@ def train_model(
         project: Name of the W&B project for experiment tracking.
 
     """
-    if config is None:
-        config = {
-            "epochs": 10,
-            "batch_size": 8,
-            "lr": 0.001,
-            "hidden_size": 128,
-            "num_layers": 2,
-            "dropout": 0.2,
-            "n_cutoff_points": 100,
-            "n_groups_cutoff_points": 10,
-            "threshold": 0.5,
-            "patience": 20,
-            "weight_decay": 0.0,
-        }
 
     # Read data from data pipeline
     crypto_data = data_pipeline.CryptoData(_LOGGER, Path("data"))
