@@ -241,7 +241,7 @@ def get_metric_objects(
     device: torch.device,
     prefix: str = "",
     threshold: float = 0.5,
-    val_metrics: list[str] | None = None,
+    tp_values_expected: bool = False,
 ) -> dict[str, torchmetrics.Metric]:
     """Initialize binary classification metrics.
 
@@ -255,9 +255,6 @@ def get_metric_objects(
         dict[str, torchmetrics.Metric]: Dictionary mapping metric names to metric objects.
 
     """
-    if val_metrics is None:
-        val_metrics = [f"{prefix}_accuracy", f"{prefix}_mean_prediction"]
-
     # Initialize all possible metrics
     all_metrics = {
         f"{prefix}_accuracy": classification.BinaryAccuracy(
@@ -276,11 +273,12 @@ def get_metric_objects(
     }
 
     # Filter metrics based on val_metrics list
-    if prefix == "val":
+    if prefix == "val" and tp_values_expected:
         return {
             metric_name: metric_obj
             for metric_name, metric_obj in all_metrics.items()
-            if metric_name in val_metrics
+            if metric_name
+            in [f"{prefix}_accuracy", f"{prefix}_mean_prediction"]
         }
     return all_metrics
 
@@ -288,131 +286,110 @@ def get_metric_objects(
 def _train_fold(
     train_dataset: data_pipeline.CryptoDataSet,
     val_dataset: data_pipeline.CryptoDataSet,
-    config: dict,
+    wandb_config: dict,
     logger_: logger.Logger,
-    project: str,
-    wandb_name: str,
+    device: torch.device,
+    train_metric_functions: dict[str, torchmetrics.Metric],
+    val_metric_functions: dict[str, torchmetrics.Metric],
+    save_best_model: bool = False,
 ) -> None:
     """Train model with hyperparameter tuning and log to Weights & Biases.
 
     Args:
         train_dataset: Training dataset
         val_dataset: Validation dataset
-        config: Hyperparameters and training configurations
+        wandb_config: Hyperparameters and training configurations
         logger_: Logger instance
-        project: Name of the W&B project
+        device: Device to run computations on
+        train_metric_functions: Dictionary of training metric functions
+        val_metric_functions: Dictionary of validation metric functions
+        save_best_model: Save the best model if True
 
     """
-    with wandb.init(project=project, config=config, name=wandb_name):
-        config = wandb.config
-        run_dir = Path(wandb.run.dir)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=wandb_config.batch_size,
+        shuffle=True,
+        drop_last=False,
+        collate_fn=collate_fn,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=wandb_config.batch_size,
+        shuffle=False,
+        drop_last=False,
+        collate_fn=collate_fn,
+    )
 
-        if torch.backends.mps.is_available():
-            device = torch.device("mps")
-        elif torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
+    # We must determine input_size from the shape of the merged_features
+    # Grab a single sample from the train_dataset to see the dimensionality
+    sample_x, _ = train_dataset[0]
+    input_size = sample_x.shape[1]  # shape is (seq_len, input_size)
 
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=config.batch_size,
-            shuffle=True,
-            drop_last=False,
-            collate_fn=collate_fn,
-        )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=config.batch_size,
-            shuffle=False,
-            drop_last=False,
-            collate_fn=collate_fn,
-        )
+    model = _LSTMClassifier(
+        input_size=input_size,
+        hidden_size=wandb_config.hidden_size,
+        num_layers=wandb_config.num_layers,
+        dropout=wandb_config.dropout,
+    ).to(device)
 
-        # We must determine input_size from the shape of the merged_features
-        # Grab a single sample from the train_dataset to see the dimensionality
-        sample_x, _ = train_dataset[0]
-        input_size = sample_x.shape[1]  # shape is (seq_len, input_size)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=wandb_config.lr,
+        weight_decay=wandb_config.weight_decay,
+    )
 
-        model = _LSTMClassifier(
-            input_size=input_size,
-            hidden_size=config.hidden_size,
-            num_layers=config.num_layers,
-            dropout=config.dropout,
-        ).to(device)
-
-        criterion = nn.BCELoss()
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=config.lr,
-            weight_decay=config.weight_decay,
-        )
-
-        best_val_loss, best_val_accuracy = float("inf"), 0.0
-        no_improvement_epochs = 0
-        train_metric_functions = get_metric_objects(
+    best_val_loss, best_val_accuracy = float("inf"), 0.0
+    no_improvement_epochs = 0
+    for _ in range(wandb_config.epochs):
+        train_loss, train_metrics = _train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
             device,
-            "train",
-            config["threshold"],
+            train_metric_functions,
         )
-        val_metric_functions = get_metric_objects(
+        val_loss, val_metrics = _validate_one_epoch(
+            model,
+            val_loader,
+            criterion,
             device,
-            "val",
-            config["threshold"],
+            val_metric_functions,
         )
-        for _ in range(config.epochs):
-            train_loss, train_metrics = _train_one_epoch(
-                model,
-                train_loader,
-                criterion,
-                optimizer,
-                device,
-                train_metric_functions,
-            )
-            val_loss, val_metrics = _validate_one_epoch(
-                model,
-                val_loader,
-                criterion,
-                device,
-                val_metric_functions,
-            )
 
-            # Log metrics to wandb
-            wandb.log(
-                {
-                    "train_loss": train_loss,
-                    "val_loss": val_loss,
-                    **train_metrics,
-                    **val_metrics,
-                },
-            )
+        # Save best model (optional)
+        if (val_loss < best_val_loss) or (
+            val_metrics["val_accuracy"] > best_val_accuracy
+        ):
+            best_val_loss = val_loss
+            best_val_accuracy = val_metrics["val_accuracy"]
+            no_improvement_epochs = 0
 
-            # Save best model (optional)
-            if (val_loss < best_val_loss) and (
-                val_metrics["val_accuracy"] > best_val_accuracy
-            ):
-                best_val_loss = val_loss
-                best_val_accuracy = val_metrics["val_accuracy"]
-                no_improvement_epochs = 0
-
+            if save_best_model:
                 # Convert all config values to strings
                 config_str = "_".join(
-                    [f"{key}_{value}" for key, value in config.items()],
+                    [f"{key}_{value}" for key, value in wandb_config.items()],
                 )
-                model_path = run_dir / f"model_{config_str}.pt"
+                model_path = Path(wandb.run.dir) / f"model_{config_str}.pt"
                 torch.save(model.state_dict(), model_path)
                 logger_.info(f"Model saved to {model_path}")
-            else:
-                no_improvement_epochs += 1
-                if no_improvement_epochs >= config["patience"]:
-                    logger_.info("Early stopping triggered")
-                    break
+        else:
+            no_improvement_epochs += 1
+            if no_improvement_epochs >= wandb_config["patience"]:
+                logger_.info("Early stopping triggered")
+                break
+
+    return best_val_accuracy
 
 
 def train_model(
     wandb_config: wandb.Config,
     wandb_project: str,
     dataset_config: dict,
+    metric_config: dict,
+    overfit_test: bool = False,
 ) -> None:
     """Train model with Leave-One-Out Cross Validation.
 
@@ -422,33 +399,111 @@ def train_model(
         dataset_config: config for dataset creation.
 
     """
+    run = wandb.init(project=wandb_project, config=wandb_config)
+    wandb_config = wandb.config
+
     # Read data from data pipeline
     crypto_data = data_pipeline.CryptoData(_LOGGER, Path("data"))
     train_df, _ = crypto_data.load_data()
     train_coins = train_df["coin"].unique()
     _LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
 
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
+    train_metric_functions = get_metric_objects(
+        device,
+        "train",
+        metric_config["threshold"],
+    )
+    val_metric_functions = get_metric_objects(
+        device,
+        "val",
+        metric_config["threshold"],
+        tp_values_expected=overfit_test,
+    )
+
+    fold_val_accuracies = []
+    coin_info = {c["symbol"]: c for c in crypto_data.coin_info}
+    scam_fold_val_accuracies = []
+    non_scams_fold_val_accuracies = []
     for i, coin in enumerate(train_coins):
         train_df, val_df = crypto_data.train_val_split(coin)
 
+        if overfit_test:
+            dataset_config["n_time_steps"] = 1
+            val_df = train_df.copy()
         train_dataset = data_pipeline.CryptoDataSet(
-            df=train_df, logger_=_LOGGER, **dataset_config,
+            df=train_df,
+            logger_=_LOGGER,
+            **dataset_config,
         )
         val_dataset = data_pipeline.CryptoDataSet(
-            df=val_df, logger_=_LOGGER, **dataset_config,
+            df=val_df,
+            logger_=_LOGGER,
+            **dataset_config,
         )
 
-        _train_fold(
-            train_dataset,
-            val_dataset,
-            wandb_config,
-            _LOGGER,
-            wandb_project,
-            f"{i}_{coin}",
+        best_val_accurcay = _train_fold(
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            wandb_config=wandb_config,
+            logger_=_LOGGER,
+            device=device,
+            train_metric_functions=train_metric_functions,
+            val_metric_functions=val_metric_functions,
         )
-        _LOGGER.info(f"Fold {i+1}/{len(train_coins)} with coin {coin} done.")
+        fold_val_accuracies.append(best_val_accurcay)
+
+        if coin_info.get(coin):
+            scam_fold_val_accuracies.append(best_val_accurcay)
+        else:
+            non_scams_fold_val_accuracies.append(best_val_accurcay)
+
+        _LOGGER.info(
+            f"Fold {i+1}/{len(train_coins)} coin={coin} done. Val acc={best_val_accurcay:.3f}",
+        )
 
     _LOGGER.info("All folds are done.")
+
+    mean_acc_all = (
+        float(np.mean(fold_val_accuracies)) if fold_val_accuracies else 0.0
+    )
+    mean_acc_scam = (
+        float(np.mean(scam_fold_val_accuracies))
+        if scam_fold_val_accuracies
+        else 0.0
+    )
+    mean_acc_non_scam = (
+        float(np.mean(non_scams_fold_val_accuracies))
+        if non_scams_fold_val_accuracies
+        else 0.0
+    )
+
+    if (mean_acc_scam + mean_acc_non_scam) > 0:
+        balanced_score = (
+            2.0
+            * mean_acc_non_scam
+            * mean_acc_scam
+            / (mean_acc_non_scam + mean_acc_scam)
+        )
+    else:
+        balanced_score = 0.0
+
+    wandb.log(
+        {
+            "mean_val_accuracy_all": mean_acc_all,
+            "mean_val_accuracy_scam": mean_acc_scam,
+            "mean_val_accuracy_non_scam": mean_acc_non_scam,
+            "balanced_score": balanced_score,
+        },
+    )
+
+    wandb.finish()
 
 
 if __name__ == "__main__":

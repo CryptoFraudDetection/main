@@ -7,7 +7,7 @@ from CryptoFraudDetection.models.baseline import train_model
 
 # Sweep configuration aligned with baseline model parameters
 sweep_config = {
-    "method": "random",
+    "method": "grid",
     "metric": {
         "name": "val_accuracy",  # Match the metric name from baseline model
         "goal": "maximize",
@@ -29,7 +29,9 @@ sweep_config = {
 dataset_config = {
     "n_cutoff_points": 1,
     "n_groups_cutoff_points": 1,
-    "n_time_steps": 5,
+}
+metric_config = {
+    "threshold": 0.5,
 }
 
 ENTITY = "nod0ndel"
@@ -66,6 +68,8 @@ def main():
             wandb_config=wandb.config,
             wandb_project=PROJECT,
             dataset_config=dataset_config,
+            metric_config=metric_config,
+            overfit_test=True,
         ),
     )
 
