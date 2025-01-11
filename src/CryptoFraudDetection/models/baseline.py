@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 import torchmetrics
 import tqdm
@@ -291,6 +292,7 @@ def _train_fold(
     device: torch.device,
     train_metric_functions: dict[str, torchmetrics.Metric],
     val_metric_functions: dict[str, torchmetrics.Metric],
+    fold_info: dict,
     save_best_model: bool = False,
 ) -> None:
     """Train model with hyperparameter tuning and log to Weights & Biases.
@@ -303,6 +305,7 @@ def _train_fold(
         device: Device to run computations on
         train_metric_functions: Dictionary of training metric functions
         val_metric_functions: Dictionary of validation metric functions
+        fold_info: Dictionary containing fold metadata (coin, fold_number)
         save_best_model: Save the best model if True
 
     """
@@ -342,7 +345,9 @@ def _train_fold(
 
     best_val_loss, best_val_accuracy = float("inf"), 0.0
     no_improvement_epochs = 0
-    for _ in range(wandb_config.epochs):
+
+    stats = []
+    for epoch in range(wandb_config.epochs):
         train_loss, train_metrics = _train_one_epoch(
             model,
             train_loader,
@@ -358,30 +363,66 @@ def _train_fold(
             device,
             val_metric_functions,
         )
+        epoch_stats = {
+            "epoch": epoch,
+            "fold": fold_info["fold_number"],
+            "coin": fold_info["coin"],
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            **train_metrics,
+            **val_metrics,
+        }
+        stats.append(epoch_stats)
 
-        # Save best model (optional)
-        if (val_loss < best_val_loss) or (
-            val_metrics["val_accuracy"] > best_val_accuracy
-        ):
-            best_val_loss = val_loss
-            best_val_accuracy = val_metrics["val_accuracy"]
-            no_improvement_epochs = 0
+    return best_val_accuracy, stats
 
-            if save_best_model:
-                # Convert all config values to strings
-                config_str = "_".join(
-                    [f"{key}_{value}" for key, value in wandb_config.items()],
-                )
-                model_path = Path(wandb.run.dir) / f"model_{config_str}.pt"
-                torch.save(model.state_dict(), model_path)
-                logger_.info(f"Model saved to {model_path}")
-        else:
-            no_improvement_epochs += 1
-            if no_improvement_epochs >= wandb_config["patience"]:
-                logger_.info("Early stopping triggered")
-                break
 
-    return best_val_accuracy
+def _calculate_epoch_means(all_fold_stats: list) -> dict:
+    """Calculate mean metrics per epoch across all folds.
+
+    Args:
+        all_fold_stats: List of lists, where each inner list contains stats for one fold
+
+    Returns:
+        Dictionary with mean metrics per epoch
+
+    """
+    # Group stats by epoch
+    epoch_groups = {}
+    for (
+        fold_stats
+    ) in all_fold_stats:  # fold_stats is already a list of epochs for one fold
+        for stat in fold_stats:
+            epoch = stat["epoch"]
+            if epoch not in epoch_groups:
+                epoch_groups[epoch] = []
+            epoch_groups[epoch].append(
+                {
+                    "train_loss": stat["train_loss"],
+                    "val_loss": stat["val_loss"],
+                    "train_accuracy": stat["train_accuracy"],
+                    "val_accuracy": stat["val_accuracy"],
+                },
+            )
+
+    # Calculate means for each epoch
+    epoch_means = {}
+    for epoch, stats in epoch_groups.items():
+        epoch_means[epoch] = {
+            "mean_train_loss": float(
+                np.mean([s["train_loss"] for s in stats]),
+            ),
+            "mean_val_loss": float(np.mean([s["val_loss"] for s in stats])),
+            "mean_train_accuracy": float(
+                np.mean([s["train_accuracy"] for s in stats]),
+            ),
+            "mean_val_accuracy": float(
+                np.mean([s["val_accuracy"] for s in stats]),
+            ),
+            "active_folds": len(stats),
+        }
+
+    return epoch_means
 
 
 def train_model(
@@ -427,6 +468,7 @@ def train_model(
         tp_values_expected=overfit_test,
     )
 
+    all_fold_stats = []
     fold_val_accuracies = []
     coin_info = {c["symbol"]: c for c in crypto_data.coin_info}
     scam_fold_val_accuracies = []
@@ -435,7 +477,7 @@ def train_model(
         train_df, val_df = crypto_data.train_val_split(coin)
 
         if overfit_test:
-            dataset_config["n_time_steps"] = 1
+            dataset_config["n_time_steps"] = 5
             val_df = train_df.copy()
         train_dataset = data_pipeline.CryptoDataSet(
             df=train_df,
@@ -448,7 +490,13 @@ def train_model(
             **dataset_config,
         )
 
-        best_val_accurcay = _train_fold(
+        fold_info = {
+            "fold_number": i + 1,
+            "coin": coin,
+            "is_scam": bool(coin_info.get(coin)),
+        }
+
+        best_val_accurcay, fold_stats = _train_fold(
             train_dataset=train_dataset,
             val_dataset=val_dataset,
             wandb_config=wandb_config,
@@ -456,8 +504,16 @@ def train_model(
             device=device,
             train_metric_functions=train_metric_functions,
             val_metric_functions=val_metric_functions,
+            fold_info=fold_info,
         )
+        all_fold_stats.append(fold_stats)
         fold_val_accuracies.append(best_val_accurcay)
+
+        fold_stats_table = wandb.Table(
+            dataframe=pd.DataFrame(fold_stats),
+            columns=fold_stats[0].keys(),
+        )
+        wandb.log({f"fold_{i+1}_{coin}_stats": fold_stats_table})
 
         if coin_info.get(coin):
             scam_fold_val_accuracies.append(best_val_accurcay)
@@ -502,6 +558,19 @@ def train_model(
             "balanced_score": balanced_score,
         },
     )
+
+    # Log overall training stats
+    epoch_means = _calculate_epoch_means(all_fold_stats)
+    for means in epoch_means.values():
+        wandb.log(means)  # wandb will handle the epoch counter automatically
+
+    # Flatten only for the table
+    flat_stats = [stat for fold in all_fold_stats for stat in fold]
+    all_stats_table = wandb.Table(
+        dataframe=pd.DataFrame(flat_stats),
+        columns=flat_stats[0].keys()
+    )
+    wandb.log({"all_training_stats": all_stats_table})
 
     wandb.finish()
 
