@@ -28,22 +28,26 @@ def _rename_columns(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
 class CryptoData:
     def __init__(
         self,
-        data_dir: Path,
         logger_: logger.Logger,
+        data_dir: Path = Path("../data"),
         coin_info_file_path: Path = Path("raw/coins.json"),
         price_dir_path: Path = Path("raw/coin_price_data"),
         twitter_parquet_path: Path = Path(
             "processed/x_sentiment.parquet",
         ),
         reddit_parquet_path: Path = Path("processed/reddit_sentiment.parquet"),
+        train_parquet_path: Path | str = "processed/train.parquet",
+        test_parquet_path: Path | str = "processed/test.parquet",
     ):
         self._logger = logger_
-        self._data_dir = data_dir
+        self.data_dir = data_dir
 
         self._coin_info_file_path = coin_info_file_path
         self._price_dir_path = price_dir_path
         self._twitter_parquet_path = twitter_parquet_path
         self._reddit_parquet_path = reddit_parquet_path
+        self.train_parquet_path = train_parquet_path
+        self.test_parquet_path = test_parquet_path
 
         self.coin_info = None
         self._twitter_df = None
@@ -71,8 +75,18 @@ class CryptoData:
 
     def load_data(self) -> None:
         # load coin info
-        with self._data_dir.joinpath(self._coin_info_file_path).open() as f:
+        with self.data_dir.joinpath(self._coin_info_file_path).open() as f:
             self.coin_info = json.load(f)
+
+        train_parquet_path = self.data_dir / self.train_parquet_path
+        test_parquet_path = self.data_dir / self.test_parquet_path
+        if train_parquet_path.exists() and test_parquet_path.exists():
+            self.train_df = pd.read_parquet(train_parquet_path)
+            self.test_df = pd.read_parquet(test_parquet_path)
+            self._logger.info("Processed data found, loading it.")
+            return self.train_df, self.test_df
+
+        self._logger.info("Loading data and preprocessing data.")
 
         # load price data
         csv_name_overwrite = {
@@ -84,7 +98,7 @@ class CryptoData:
         price_dfs = []
         for coin in self.coin_info:
             symbol = coin["symbol"].lower()
-            coin["csv_name"] = self._data_dir.joinpath(
+            coin["csv_name"] = self.data_dir.joinpath(
                 self._price_dir_path,
                 csv_name_overwrite.get(symbol, symbol) + ".csv",
             )
@@ -108,7 +122,7 @@ class CryptoData:
 
         # Load Twitter data
         twitter_df = pd.read_parquet(
-            self._data_dir.joinpath(self._twitter_parquet_path),
+            self.data_dir.joinpath(self._twitter_parquet_path),
         )
         twitter_column_map = {
             "timestamp": "datetime",
@@ -126,7 +140,7 @@ class CryptoData:
 
         # Load Reddit data
         reddit_df = pd.read_parquet(
-            self._data_dir.joinpath(self._reddit_parquet_path),
+            self.data_dir.joinpath(self._reddit_parquet_path),
         )
         reddit_column_map = {
             "created": "datetime",
@@ -139,6 +153,11 @@ class CryptoData:
         reddit_df["embedding"] = reddit_df["embedding"]
         self._reddit_df = reddit_df
         self._validate_price_data()
+        self._group_social_media_dfs()
+        self._merge_dfs()
+        self._train_test_split()
+        self.save_data()
+        return self.train_df, self.test_df
 
     def _group_social_media_df(
         self,
@@ -273,18 +292,41 @@ class CryptoData:
             ~self.merged_df["coin"].isin(test_coins)
         ]
         self.test_df = self.merged_df[self.merged_df["coin"].isin(test_coins)]
-        return self.train_df, self.test_df
 
-    def preprocess(self) -> None:
-        self._group_social_media_dfs()
-        self._merge_dfs()
-        return self._train_test_split()
-
-    def save_data(
+    def train_val_split(
         self,
-        train_parquet_path: Path,
-        test_parquet_path: Path,
-    ) -> None:
+        coin_for_val: str,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Return (train_subset, val_subset) for the given coin.
+
+        Args:
+            coin_for_val (str): The coin to hold out as validation.
+
+        Returns:
+            (pd.DataFrame, pd.DataFrame):
+                - train_subset: All coins except coin_for_val
+                - val_subset: Only coin_for_val
+
+        """
+        if self.train_df is None:
+            self._logger.error(
+                "train_df is None. Make sure to call `preprocess()` first to split data.",
+            )
+
+        val_df = self.train_df[self.train_df["coin"] == coin_for_val].copy()
+        train_df = self.train_df[self.train_df["coin"] != coin_for_val].copy()
+
+        # Optionally log if val_subset is empty
+        if val_df.empty:
+            self._logger.error(
+                f"No rows found for coin '{coin_for_val}' in training data.",
+            )
+
+        return train_df, val_df
+
+    def save_data(self) -> None:
+        train_parquet_path = self.data_dir / self.train_parquet_path
+        test_parquet_path = self.data_dir / self.test_parquet_path
         self.train_df.to_parquet(train_parquet_path)
         self.test_df.to_parquet(test_parquet_path)
 
@@ -296,15 +338,28 @@ class CryptoDataSet(data.Dataset):
         self,
         df: pd.DataFrame,
         logger_: logger.Logger,
-        n_cutoff_points: int = 100,
-        n_groups_cutoff_points: int = 10,
+        n_cutoff_points: int,
+        n_groups_cutoff_points,
+        n_time_steps: int | None = None,
         embedding_columns=("twitter_embedding", "reddit_embedding"),
     ):
+        """Initialize dataset.
+
+        Args:
+            df: Input DataFrame with time series data
+            logger_: Logger instance
+            n_cutoff_points: Number of cutoff points to generate
+            n_groups_cutoff_points: Number of groups to distribute cutoff points
+            n_time_steps: If set, only use this many most recent time steps
+            embedding_columns: Column names containing embeddings
+
+        """
         self._logger = logger_
         self.df = df.copy()
         self._n_cutoff_points = n_cutoff_points
         self._n_groups_cutoff_points = n_groups_cutoff_points
         self._embedding_columns = embedding_columns
+        self._n_time_steps = n_time_steps
 
         self._merge_features()
         self._cutoff_points_all_coins()
@@ -421,6 +476,10 @@ class CryptoDataSet(data.Dataset):
                 f"No data matched the filter coin: '{coin}' & date < '{cutoff_point}'",
             )
 
+        # Take only the most recent n_time_steps if specified
+        if self._n_time_steps is not None:
+            filtered_df = filtered_df.iloc[-self._n_time_steps :]
+
         # Get features 2d-array
         x = np.array(filtered_df["merged_features"].tolist(), dtype=np.float32)
         # Get target variable 1d-array
@@ -429,5 +488,5 @@ class CryptoDataSet(data.Dataset):
         # Convert to PyTorch tensors
         return (
             torch.tensor(x, dtype=torch.float32),
-            torch.tensor(y, dtype=torch.float32),
+            torch.tensor(y[-1], dtype=torch.float32),
         )

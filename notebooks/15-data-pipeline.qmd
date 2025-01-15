@@ -15,10 +15,6 @@ jupyter: python3
 ---
 
 ```{python}
-from pathlib import Path
-
-import pandas as pd
-
 from CryptoFraudDetection.utils import data_pipeline, enums, logger
 
 LOGGER = logger.Logger(
@@ -29,31 +25,21 @@ LOGGER = logger.Logger(
 ```
 
 ```{python}
-data_dir = Path("../data")
-train_parquet_path = data_dir.joinpath(Path("processed/train.parquet"))
-test_parquet_path = data_dir.joinpath(Path("processed/test.parquet"))
-if not train_parquet_path.exists() or not test_parquet_path.exists():
-    LOGGER.info("Merged data not found, merging data.")
-    crypto_data = data_pipeline.CryptoData(data_dir, LOGGER)
-    crypto_data.load_data()
-    train_df, test_df = crypto_data.preprocess()
-    crypto_data.save_data(train_parquet_path, test_parquet_path)
-else:
-    LOGGER.info("Merged data found, loading merged data.")
-    train_df = pd.read_parquet(data_dir.joinpath(train_parquet_path))
-    test_df = pd.read_parquet(data_dir.joinpath(test_parquet_path))
+crypto_data = data_pipeline.CryptoData(LOGGER)
+
+_, test_df = crypto_data.load_data()
+train_df, val_df = crypto_data.train_val_split('BTC')
+train_df.shape, val_df.shape, test_df.shape
 ```
 
 ```{python}
 train_set = data_pipeline.CryptoDataSet(train_df, LOGGER)
+val_set = data_pipeline.CryptoDataSet(val_df, LOGGER)
 test_set = data_pipeline.CryptoDataSet(test_df, LOGGER)
+len(train_set), len(val_df), len(test_set)
 ```
 
 ```{python}
-train_set.__len__(), test_set.__len__()
-```
-
-```{python}
-train_set.__getitem__(0)
+train_set[0]
 ```
 
