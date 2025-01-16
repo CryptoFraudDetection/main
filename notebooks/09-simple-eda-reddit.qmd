@@ -1,24 +1,45 @@
 ---
 jupyter: python3
+title: embedding eda
 ---
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:29.078896Z', start_time: '2025-01-16T10:11:01.660839Z'}
 import altair as alt
+import os
+import umap
+import numpy as np
+
+import matplotlib.pyplot as plt
 import pandas as pd
+import json
+from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+from scipy.spatial.distance import pdist
+from sklearn.metrics.pairwise import cosine_similarity
+import matplotlib.patches as mpatches
+
+
+from CryptoFraudDetection.utils import embedding
+from CryptoFraudDetection.utils import enums
+from CryptoFraudDetection.utils import logger
 
 alt.themes.enable("dark")
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.344628Z', start_time: '2025-01-16T10:11:29.078896Z'}
 df = pd.read_parquet("../data/processed/reddit_posts.parquet")
 df.head(5)
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.421892Z', start_time: '2025-01-16T10:11:30.346386Z'}
 df["search_query"].value_counts()
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.703491Z', start_time: '2025-01-16T10:11:30.426098Z'}
 subreddit_query = (
     df.groupby(["search_query", "subreddit"])
     .size()
@@ -65,6 +86,7 @@ c + text
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.780258Z', start_time: '2025-01-16T10:11:30.706054Z'}
 subreddit_query_normalized = subreddit_query.copy()
 posts_per_coin = subreddit_query_normalized.groupby("search_query")["value"].transform(
     "sum"
@@ -122,6 +144,7 @@ c + text
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.846462Z', start_time: '2025-01-16T10:11:30.780258Z'}
 subreddit_query_posts = (
     df.query("depth == -1")
     .groupby(["search_query", "subreddit"])
@@ -169,6 +192,7 @@ c + text
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.908179Z', start_time: '2025-01-16T10:11:30.846462Z'}
 subreddit_query_posts_normalized = subreddit_query_posts.copy()
 posts_per_coin = subreddit_query_posts_normalized.groupby("search_query")[
     "value"
@@ -225,6 +249,7 @@ c + text
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:30.951303Z', start_time: '2025-01-16T10:11:30.908179Z'}
 depth_df = df["depth"].value_counts().sort_index()
 
 c = (
@@ -260,6 +285,7 @@ c + text
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:31.308986Z', start_time: '2025-01-16T10:11:30.951303Z'}
 comments_per_user = df.groupby("author").size()
 distribution = comments_per_user.value_counts().sort_index()
 distribution_df = distribution.reset_index()
@@ -319,10 +345,12 @@ c
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:31.338525Z', start_time: '2025-01-16T10:11:31.308986Z'}
 comments_per_user.sort_values(ascending=False).head(10)
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:31.385228Z', start_time: '2025-01-16T10:11:31.338525Z'}
 posts_per_user = df.query("depth == -1").groupby("author").size()
 distribution = posts_per_user.value_counts().sort_index()
 distribution_df = distribution.reset_index()
@@ -379,10 +407,12 @@ c
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:31.396047Z', start_time: '2025-01-16T10:11:31.385872Z'}
 posts_per_user.sort_values(ascending=False).head(10)
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:33.269533Z', start_time: '2025-01-16T10:11:31.396047Z'}
 posts_per_coin_per_date = df.copy()
 posts_per_coin_per_date["created"] = (
     pd.to_datetime(posts_per_coin_per_date["created"])
@@ -454,4 +484,137 @@ c = (
 
 c
 ```
+
+
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:40.937996Z', start_time: '2025-01-16T10:11:33.271311Z'}
+reddit_parquet = "../data/processed/reddit_embedded.parquet"
+df = pd.read_parquet(reddit_parquet)
+print("DataFrame erfolgreich geladen.")
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:40.960713Z', start_time: '2025-01-16T10:11:40.939530Z'}
+df.head(5)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:40.981904Z', start_time: '2025-01-16T10:11:40.960713Z'}
+df.columns
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:11:41.563466Z', start_time: '2025-01-16T10:11:40.981904Z'}
+coin_test = ['FTX Token', 'Safe Moon', 'Ethereum', 'Cosmos']
+
+#cut out test coins
+
+df = df[~df['search_query'].isin(coin_test)]
+with open('../data/raw/coins.json', 'r') as f:
+    coins_data = json.load(f)
+
+coins_info_df = pd.DataFrame(coins_data)
+
+merged_df = df.merge(coins_info_df, left_on="search_query", right_on="name", how="left")
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:29:44.537262Z', start_time: '2025-01-16T10:11:41.563466Z'}
+embeddings = np.vstack(merged_df["embedded_text"].values)
+fraud_labels = merged_df["fraud"]
+pca = PCA(n_components=2)
+embeddings_pca = pca.fit_transform(embeddings)
+
+umap_reducer = umap.UMAP(n_components=2, random_state=42, metric='cosine')
+embeddings_umap = umap_reducer.fit_transform(embeddings)
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+colors = ['red' if fraud else 'blue' for fraud in fraud_labels]
+
+axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], c=colors, alpha=0.25, edgecolor='k')
+axes[0].set_title("PCA of Embeddings")
+axes[0].set_xlabel("PCA Component 1")
+axes[0].set_ylabel("PCA Component 2")
+
+axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], c=colors, alpha=0.15, edgecolor='k')
+axes[1].set_title("UMAP of Embeddings")
+axes[1].set_xlabel("UMAP Dimension 1")
+axes[1].set_ylabel("UMAP Dimension 2")
+
+fraud_legend = [
+    plt.Line2D([0], [0], marker='o', color='w', label='Fraud', markerfacecolor='red', markersize=10),
+    plt.Line2D([0], [0], marker='o', color='w', label='Non-Fraud', markerfacecolor='blue', markersize=10)
+]
+fig.legend(handles=fraud_legend, loc="upper right")
+
+plt.tight_layout()
+plt.show()
+```
+
+Here we can see the embeddings plottet as pca and umap top 2 componnents. The color represents if the posts was about a scam or non scam coin.There are clusters of Scam and non-Scam Embeddings visible, but it could be that these are just scams about the same coin.
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:31:11.388173Z', start_time: '2025-01-16T10:30:56.138106Z'}
+coin_labels = merged_df["search_query"].values
+unique_coins = np.unique(coin_labels)
+coin_colors = {coin: plt.cm.tab10(i / len(unique_coins)) for i, coin in enumerate(unique_coins)}
+colors = [coin_colors[coin] for coin in coin_labels]
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], c=colors, alpha=0.1, edgecolor='k')
+axes[0].set_title("PCA of Embeddings")
+axes[0].set_xlabel("PCA Component 1")
+axes[0].set_ylabel("PCA Component 2")
+
+axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], c=colors, alpha=0.1, edgecolor='k')
+axes[1].set_title("UMAP of Embeddings")
+axes[1].set_xlabel("UMAP Dimension 1")
+axes[1].set_ylabel("UMAP Dimension 2")
+
+legend_elements = [
+    plt.Line2D([0], [0], marker='o', color='w', label=coin, markerfacecolor=coin_colors[coin], markersize=10)
+    for coin in unique_coins
+]
+fig.legend(handles=legend_elements, loc="upper right", title="Coins")
+
+plt.tight_layout()
+plt.show()
+```
+
+Here we can see the same plot but with the color representing the coin. Bitcoin is the most common coin in the dataset and therefore the most visible. It is hard to intrepred something, because the posts of the bitcoin are so dominant.maybe there are some cluster but there are so many data points that it is also hard to see.
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T10:46:15.202156Z', start_time: '2025-01-16T10:31:59.185610Z'}
+unique_keywords = df['search_query'].unique()
+
+for keyword in unique_keywords:
+    keyword_df = df[df['search_query'] == keyword]
+    
+    embeddings = np.vstack(keyword_df['embedded_text'].values)
+
+    pca = PCA(n_components=2)
+    embeddings_pca = pca.fit_transform(embeddings)
+
+    umap_reducer = umap.UMAP(n_components=2, metric='cosine', random_state=42)
+    embeddings_umap = umap_reducer.fit_transform(embeddings)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    axes[0].scatter(embeddings_pca[:, 0], embeddings_pca[:, 1], alpha=0.7, edgecolor='k')
+    axes[0].set_title(f"PCA of Embeddings for {keyword}")
+    axes[0].set_xlabel("PCA Component 1")
+    axes[0].set_ylabel("PCA Component 2")
+
+    axes[1].scatter(embeddings_umap[:, 0], embeddings_umap[:, 1], alpha=0.7, edgecolor='k')
+    axes[1].set_title(f"UMAP of Embeddings for {keyword}")
+    axes[1].set_xlabel("UMAP Dimension 1")
+    axes[1].set_ylabel("UMAP Dimension 2")
+
+    plt.tight_layout()
+    plt.show()
+```
+
+obove we can see the same for every coin by itself. There ist not specific indicate, that some clusters tend to be for scams or no scams. For Example the plots for Avalanche (no Scam) and Bitforex (scam) look similar.
 
