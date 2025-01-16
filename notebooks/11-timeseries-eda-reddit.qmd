@@ -1,137 +1,182 @@
 ---
-jupyter: python3
 title: Scrape Reddit Posts
+jupyter: python3
 ---
 
-
 ```{python}
-import pandas as pd
+#| ExecuteTime: {end_time: '2025-01-16T12:58:56.264221Z', start_time: '2025-01-16T12:58:56.260569Z'}
 import matplotlib.pyplot as plt
-import yfinance as yf
-
+import seaborn as sns
+import pandas as pd
+import json
+import numpy as np
 ```
 
 ```{python}
-df = pd.read_parquet("../data/processed/reddit_posts_2.parquet")
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.528191Z', start_time: '2025-01-16T12:58:56.264306Z'}
+df = pd.read_parquet("../data/processed/reddit_posts.parquet")
 ```
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.771406Z', start_time: '2025-01-16T12:58:57.528191Z'}
+df['created'] = pd.to_datetime(df['created'])
 df.head(5)
 ```
+
+## Import used Coins from Json and define Keyword
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.791493Z', start_time: '2025-01-16T12:58:57.771406Z'}
+with open('../data/raw/coins.json', 'r') as f:
+    coins_data = json.load(f)
 
-df['created'] = pd.to_datetime(df['created'])
+coin_to_dates = {}
+for coin in coins_data:
+    coin_name = coin['name']
+    start_date_str = coin['start_date']
+    end_date_str = coin['end_date'] or '2024-11-01'
+    start_date = pd.to_datetime(start_date_str)
+    end_date = pd.to_datetime(end_date_str)
+    coin_to_dates[coin_name] = (start_date, end_date)
 
-df['date'] = df['created'].dt.date
-grouped = df.groupby(['date', 'search_query']).size().reset_index(name='count')
-
-
-pivot_df = grouped.pivot(index='date', columns='search_query', values='count').fillna(0)
-```
-```{python}
-def plot_pivot_df(pivot_df):
-    num_plots = len(pivot_df.columns)
-    fig, axes = plt.subplots(
-        nrows=num_plots, ncols=1, figsize=(10, num_plots * 3), sharex=True
-    )
-
-    
-    if num_plots == 1:
-        axes = [axes]
-
-    for idx, (query, data) in enumerate(pivot_df.items()):
-        ax = axes[idx]
-        ax.plot(data.index, data.values, label=query)
-        ax.set_title(f"Search Query: {query}")
-        ax.set_ylabel('Anzahl der Einträge')
-        ax.legend(loc='upper left')
-        ax.grid(True)
-
-    plt.xlabel('Datum')
-    plt.tight_layout()
-    plt.show()
-
-
-plot_pivot_df(pivot_df)
-```
-```{python}
-exclude_coins_testset = ['Ethereum', 'Cosmos', 'FTX Token', 'Safe Moon']
-
-filtered_queries = [query for query in pivot_df.columns if query not in exclude_coins_testset]
-
-print("Coins ohne testset: "  + filtered_queries)
-```
-```{python}
-# mapp coins for yfinance
-ticker_mapping = {
-    'Avalanche': 'AVAX-USD',
-    'BeerCoin': None,          # BeerCoin not on yfinance
-    'BitForex': None,          # BitForex no coin
-    'Bitcoin': 'BTC-USD',
-    'ChainLink': 'LINK-USD',
-    'THORChain': 'RUNE-USD',
-    'Teddy Doge': None,        # not found
-    'Terra Luna': 'LUNA-USD' 
+keyword_to_coin = {
+    'Bitcoin': 'Bitcoin',
+    'Ethereum': 'Ethereum',
+    'Chainlink': 'Chainlink',
+    'thorchain': 'THORChain',
+    '$Atom': 'Cosmos',
+    'Bitforex': 'BitForex',
+    '$Avax': 'Avalanche',
+    'Terra Luna': 'Terra Luna',
+    '$FTT': 'FTX Token',
+    'Safemoon': 'Safe Moon',
+    '$STA': 'STOA Network',
+    'Beercoin': 'BeerCoin',
+    'Teddy Doge': 'Teddy Doge'
 }
 
-available_queries = [query for query in filtered_queries if ticker_mapping.get(query) is not None]
-print("Verfügbare Suchanfragen mit Tickersymbolen:", available_queries)
+df_keywords = ['Bitcoin', 'Ethereum', 'Chainlink', 'thorchain', '$Atom', 'Bitforex', '$Avax', 'Terra Luna', '$FTT', 'Safemoon', '$STA', 'Beercoin', 'Teddy Doge']
+
+missing_keywords = set(df_keywords) - set(keyword_to_coin.keys())
+
+if missing_keywords:
+    print(f"Missing mappings for keywords: {missing_keywords}")
 ```
+
 ```{python}
-# save coindata from yfinance
-coin_data_dict = {}
+#| ExecuteTime: {end_time: '2025-01-16T13:11:46.379239Z', start_time: '2025-01-16T13:11:44.413879Z'}
+df['created'] = pd.to_datetime(df['created'])
+df['date'] = df['created'].dt.date
+grouped = df.groupby(['search_query', 'date']).size().reset_index(name='count')
+grouped = grouped.sort_values('date')
 
-for query in available_queries:
-    ticker = ticker_mapping[query]
-    try:
-        data = pivot_df[query]
-        start_date = min(data.index).strftime('%Y-%m-%d')
-        end_date = max(data.index).strftime('%Y-%m-%d')
-        coin_data = yf.download(ticker, start=start_date, end=end_date)
-        if not coin_data.empty:
-            coin_data_dict[query] = coin_data
-        else:
-            coin_data_dict[query] = None  
-    except Exception as e:
-        coin_data_dict[query] = None
+print(grouped)
+keywords = df['search_query'].unique()
+N = len(keywords)
 
-```
-```{python}
-num_queries = len(available_queries)
-fig, axes = plt.subplots(nrows=num_queries, ncols=2, figsize=(15, num_queries * 4), sharex='col')
+fig, axes = plt.subplots(N, 1, figsize=(12, N * 2), sharex=True)
 
-for idx, query in enumerate(available_queries):
-    data = pivot_df[query]
-    # Subplot 1: Anzahl der Einträge
-    if num_queries > 1:
-        ax1 = axes[idx, 0]
+for i, keyword in enumerate(keywords):
+    ax = axes[i] if N > 1 else axes
+    
+    # Filter the grouped dataframe to just the current keyword, copy it
+    data = grouped[grouped['search_query'] == keyword].copy()
+    data.set_index('date', drop=True, inplace=True)
+    
+    # Only keep numeric columns for reindexing
+    data = data[['count']]
+    
+    # Reindex over the entire date range
+    full_idx = pd.date_range(start=grouped['date'].min(), 
+                             end=grouped['date'].max(), freq='D')
+    data = data.reindex(full_idx, fill_value=0)
+
+    data['count_smooth'] = data['count']
+    ax.plot(data.index, data['count_smooth'], label='Count (smoothed)')
+    
+    ax.set_title(keyword)
+    ax.set_ylabel('Count')
+    
+    coin_name = keyword_to_coin.get(keyword)
+    if coin_name:
+        start_date, end_date = coin_to_dates.get(coin_name, (None, None))
+        if start_date and end_date:
+            ax.axvline(x=start_date, color='red', linestyle='--')
+            ax.axvline(x=end_date, color='red', linestyle='--')
+    
+    if i == N - 1:
+        ax.set_xlabel('Date')
     else:
-        ax1 = axes[0]
-    ax1.plot(data.index, data.values, label=f'Einträge: {query}')
-    ax1.set_title(f"Suchanfrage: {query} - Anzahl der Einträge")
-    ax1.set_ylabel('Anzahl der Einträge')
-    ax1.legend(loc='upper left')
-    ax1.grid(True)
+        ax.set_xlabel('')
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True)
 
-    # Subplot 2: Historische Preise (Coin-Daten)
-    if num_queries > 1:
-        ax2 = axes[idx, 1]
-    else:
-        ax2 = axes[1]
-    coin_data = coin_data_dict.get(query)
-    if coin_data is not None:
-        ax2.plot(coin_data.index, coin_data['Close'], label=f'{query} Preis')
-        ax2.set_title(f"Suchanfrage: {query} - Historische Preise")
-        ax2.set_ylabel('Preis (USD)')
-        ax2.legend(loc='upper left')
-        ax2.grid(True)
-    else:
-        ax2.text(0.5, 0.5, f'Keine Preisdaten für {query}', ha='center', va='center', transform=ax2.transAxes)
-        ax2.set_title(f"Suchanfrage: {query} - Keine Preisdaten verfügbar")
-        ax2.set_xticks([])
-        ax2.set_yticks([])
-
-# Gemeinsame X-Achse
-plt.xlabel('Datum')
 plt.tight_layout()
+plt.suptitle('Count of Search Keywords over Time', y=1.02)
+plt.subplots_adjust(hspace=0.3)
 plt.show()
 ```
+
+In this plot we can see the Count of Tweets of every coin over the time. In red we can see the start and enddate which we are interested in.
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:14:56.066582Z', start_time: '2025-01-16T13:14:55.903988Z'}
+#cut out coins of test data
+test_coins = ['Ethereum', '$Atom', '$FTT', 'Safemoon']
+
+df_train = df[~df['search_query'].isin(test_coins)]
+df_train
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:14:57.953786Z', start_time: '2025-01-16T13:14:57.950249Z'}
+words_list = ['moon', 'mooon', 'to 0', 'to zero', 'scam', 'fraud', 'rug', 'rugpull', 'pump', 'dump', 'rich', 'poor', 'millionaire']
+words_list_2 = [ 'billionaire', 'invest', 'massive','time','trust', 'haters'
+]
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:15:32.205231Z', start_time: '2025-01-16T13:14:58.908646Z'}
+# Function to generate heatmaps
+def create_heatmaps(df, words_list):
+    for keyword in df['search_query'].unique():
+        subset = df[df['search_query'] == keyword]
+        
+        start_date = subset['created'].min().date() - pd.Timedelta(days=10)
+        end_date = subset['created'].max().date() + pd.Timedelta(days=10)
+        all_dates = pd.date_range(start_date, end_date).date
+        
+        heatmap_data = pd.DataFrame(0, index=words_list, columns=all_dates)
+        
+        for _, row in subset.iterrows():
+            post_date = row['created'].date()
+            for word in words_list:
+                if word in row['body'].lower():
+                    heatmap_data.at[word, post_date] += 1
+
+        for date in all_dates:
+            if date not in heatmap_data.columns:
+                heatmap_data[date] = 0
+        
+        plt.figure(figsize=(12, 6), facecolor='white')
+        plt.title(f"Heatmap for search_query: {keyword}", fontsize=14)
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel("Words", fontsize=12)
+
+        xticks_indices = np.linspace(0, len(all_dates) - 1, min(10, len(all_dates))).astype(int)
+        xticks_labels = [all_dates[i] for i in xticks_indices]
+        
+        plt.xticks(xticks_indices, xticks_labels, rotation=45, fontsize=10)
+        plt.yticks(range(len(words_list)), words_list, fontsize=10)
+        
+        plt.imshow(heatmap_data, aspect='auto', cmap='viridis', interpolation='nearest', origin='lower')
+        plt.colorbar(label='Frequency', orientation='vertical')
+        plt.tight_layout()
+        plt.show()
+
+create_heatmaps(df_train, words_list)
+create_heatmaps(df_train, words_list_2)
+```
+
+In this plot we can see the Heatmap of the words in the posts over the time. The words were specific chosen from domain knowledge, that could indicate word used from scammers to promote their coins.
+
