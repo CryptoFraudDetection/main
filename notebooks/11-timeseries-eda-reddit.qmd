@@ -1,8 +1,10 @@
 ---
-jupyter: python3
 title: Scrape Reddit Posts
+jupyter: python3
 ---
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:56.264221Z', start_time: '2025-01-16T12:58:56.260569Z'}
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -11,14 +13,20 @@ import numpy as np
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.528191Z', start_time: '2025-01-16T12:58:56.264306Z'}
 df = pd.read_parquet("../data/processed/reddit_posts.parquet")
 ```
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.771406Z', start_time: '2025-01-16T12:58:57.528191Z'}
 df['created'] = pd.to_datetime(df['created'])
 df.head(5)
 ```
+
 ## Import used Coins from Json and define Keyword
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T12:58:57.791493Z', start_time: '2025-01-16T12:58:57.771406Z'}
 with open('../data/raw/coins.json', 'r') as f:
     coins_data = json.load(f)
 
@@ -53,30 +61,39 @@ missing_keywords = set(df_keywords) - set(keyword_to_coin.keys())
 
 if missing_keywords:
     print(f"Missing mappings for keywords: {missing_keywords}")
-
 ```
+
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:11:46.379239Z', start_time: '2025-01-16T13:11:44.413879Z'}
 df['created'] = pd.to_datetime(df['created'])
 df['date'] = df['created'].dt.date
 grouped = df.groupby(['search_query', 'date']).size().reset_index(name='count')
 grouped = grouped.sort_values('date')
-grouped = pd.to_datetime(grouped['date'])
+
+print(grouped)
 keywords = df['search_query'].unique()
 N = len(keywords)
-
 
 fig, axes = plt.subplots(N, 1, figsize=(12, N * 2), sharex=True)
 
 for i, keyword in enumerate(keywords):
     ax = axes[i] if N > 1 else axes
-    data = grouped[grouped['search_query'] == keyword]
-    data = data.set_index('date')
     
-    data = data.reindex(pd.date_range(start=grouped['date'].min(), end=grouped['date'].max(), freq='D'),fill_value = 0)
+    # Filter the grouped dataframe to just the current keyword, copy it
+    data = grouped[grouped['search_query'] == keyword].copy()
+    data.set_index('date', drop=True, inplace=True)
+    
+    # Only keep numeric columns for reindexing
+    data = data[['count']]
+    
+    # Reindex over the entire date range
+    full_idx = pd.date_range(start=grouped['date'].min(), 
+                             end=grouped['date'].max(), freq='D')
+    data = data.reindex(full_idx, fill_value=0)
 
-    
     data['count_smooth'] = data['count']
-    ax.plot(data.index, data['count_smooth'])
+    ax.plot(data.index, data['count_smooth'], label='Count (smoothed)')
+    
     ax.set_title(keyword)
     ax.set_ylabel('Count')
     
@@ -100,9 +117,10 @@ plt.subplots_adjust(hspace=0.3)
 plt.show()
 ```
 
-X
+In this plot we can see the Count of Tweets of every coin over the time. In red we can see the start and enddate which we are interested in.
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:14:56.066582Z', start_time: '2025-01-16T13:14:55.903988Z'}
 #cut out coins of test data
 test_coins = ['Ethereum', '$Atom', '$FTT', 'Safemoon']
 
@@ -111,12 +129,14 @@ df_train
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:14:57.953786Z', start_time: '2025-01-16T13:14:57.950249Z'}
 words_list = ['moon', 'mooon', 'to 0', 'to zero', 'scam', 'fraud', 'rug', 'rugpull', 'pump', 'dump', 'rich', 'poor', 'millionaire']
 words_list_2 = [ 'billionaire', 'invest', 'massive','time','trust', 'haters'
 ]
 ```
 
 ```{python}
+#| ExecuteTime: {end_time: '2025-01-16T13:15:32.205231Z', start_time: '2025-01-16T13:14:58.908646Z'}
 # Function to generate heatmaps
 def create_heatmaps(df, words_list):
     for keyword in df['search_query'].unique():
@@ -158,7 +178,5 @@ create_heatmaps(df_train, words_list)
 create_heatmaps(df_train, words_list_2)
 ```
 
-asdf
-```{python}
+In this plot we can see the Heatmap of the words in the posts over the time. The words were specific chosen from domain knowledge, that could indicate word used from scammers to promote their coins.
 
-```
