@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 import torchmetrics
 import tqdm
@@ -71,6 +70,9 @@ class _LSTMClassifier(nn.Module):
         return self.sigmoid(logits).squeeze(-1)
 
 
+type EpochStats = dict[str, float | str]
+
+
 def _train_one_epoch(
     model: nn.Module,
     train_loader: DataLoader,
@@ -78,7 +80,7 @@ def _train_one_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     metric_functions: dict,
-) -> tuple[float, dict]:
+) -> EpochStats:
     """Train model for one epoch following efficient metric computation pattern.
 
     Args:
@@ -121,12 +123,13 @@ def _train_one_epoch(
 
     # Compute epoch metrics
     loss = running_loss / n_samples
-    metric_values = {
+    epoch_stats: EpochStats = {
         name: metric_func.compute().item()
         for name, metric_func in metric_functions.items()
     }
+    epoch_stats["loss"] = loss
 
-    return loss, metric_values
+    return epoch_stats
 
 
 @torch.no_grad()
@@ -136,7 +139,7 @@ def _validate_one_epoch(
     criterion: nn.Module,
     device: torch.device,
     metric_functions: dict,
-) -> tuple[float, dict]:
+) -> EpochStats:
     """Validate model for one epoch using efficient metric computation."""
     model.eval()
     running_loss = 0.0
@@ -160,12 +163,13 @@ def _validate_one_epoch(
             metric_func.update(outputs, y_batch)
 
     loss = running_loss / n_samples
-    metric_values = {
+    epoch_stats: EpochStats = {
         name: metric_func.compute().item()
         for name, metric_func in metric_functions.items()
     }
+    epoch_stats["loss"] = loss
 
-    return loss, metric_values
+    return epoch_stats
 
 
 type Batch = tuple[torch.Tensor, torch.Tensor]
@@ -238,68 +242,24 @@ class MeanPrediction(torchmetrics.Metric):
         return self.sum / self.count
 
 
-def get_metric_objects(
-    device: torch.device,
-    prefix: str = "",
-    threshold: float = 0.5,
-) -> dict[str, torchmetrics.Metric]:
-    """Initialize binary classification metrics.
-
-    Args:
-        device: The device to move metrics to.
-        prefix: Prefix for metric names. Defaults to "".
-        threshold: Threshold for converting probabilities to class labels. Defaults to 0.5.
-        val_metrics: List of metric names to include. If None, defaults to ["val_accuracy", "val_mean_prediction"].
-
-    Returns:
-        dict[str, torchmetrics.Metric]: Dictionary mapping metric names to metric objects.
-
-    """
-    # Initialize all possible metrics
-    all_metrics = {
-        f"{prefix}_accuracy": classification.BinaryAccuracy(
-            threshold=threshold,
-        ).to(device),
-        f"{prefix}_precision": classification.BinaryPrecision(
-            threshold=threshold,
-        ).to(device),
-        f"{prefix}_recall": classification.BinaryRecall(
-            threshold=threshold,
-        ).to(device),
-        f"{prefix}_f1": classification.BinaryF1Score(threshold=threshold).to(
-            device,
-        ),
-        f"{prefix}_mean_prediction": MeanPrediction().to(device),
-    }
-
-    # Filter metrics based on val_metrics list
-    if prefix == "val":
-        return {
-            metric_name: metric_obj
-            for metric_name, metric_obj in all_metrics.items()
-            if metric_name
-            in [f"{prefix}_accuracy", f"{prefix}_mean_prediction"]
-        }
-    return all_metrics
+type FoldStats = list[EpochStats]
 
 
 def _train_fold(
     train_dataset: data_pipeline.CryptoDataSet,
     val_dataset: data_pipeline.CryptoDataSet,
     wandb_config: dict,
-    logger_: logger.Logger,
     device: torch.device,
     train_metric_functions: dict[str, torchmetrics.Metric],
     val_metric_functions: dict[str, torchmetrics.Metric],
     fold_info: dict,
-) -> None:
+) -> FoldStats:
     """Train model with hyperparameter tuning and log to Weights & Biases.
 
     Args:
         train_dataset: Training dataset
         val_dataset: Validation dataset
         wandb_config: Hyperparameters and training configurations
-        logger_: Logger instance
         device: Device to run computations on
         train_metric_functions: Dictionary of training metric functions
         val_metric_functions: Dictionary of validation metric functions
@@ -342,7 +302,7 @@ def _train_fold(
 
     stats = []
     for epoch in range(wandb_config.epochs):
-        train_loss, train_metrics = _train_one_epoch(
+        train_metrics = _train_one_epoch(
             model,
             train_loader,
             criterion,
@@ -350,19 +310,19 @@ def _train_fold(
             device,
             train_metric_functions,
         )
-        val_loss, val_metrics = _validate_one_epoch(
+        val_metrics = _validate_one_epoch(
             model,
             val_loader,
             criterion,
             device,
             val_metric_functions,
         )
+        train_metrics = {f"train_{k}": v for k, v in train_metrics.items()}
+        val_metrics = {f"val_{k}": v for k, v in val_metrics.items()}
         epoch_stats = {
             "epoch": epoch,
             "fold": fold_info["fold_number"],
             "coin": fold_info["coin"],
-            "train_loss": train_loss,
-            "val_loss": val_loss,
             **train_metrics,
             **val_metrics,
         }
@@ -374,7 +334,7 @@ def _train_fold(
 def _aggregate_metrics(
     all_fold_stats: list[dict],
     epoch: int,
-    coin_info: dict,
+    coin_info: list[dict],
 ) -> dict:
     """Aggregate metrics from all folds for a single epoch.
 
@@ -389,21 +349,22 @@ def _aggregate_metrics(
     """
     # Filter stats for current epoch
     epoch_stats = [
-        stat
-        for stats in all_fold_stats
-        for stat in stats
-        if stat["epoch"] == epoch
+        epoch_stats
+        for fold_stats in all_fold_stats
+        for epoch_stats in fold_stats
+        if epoch_stats["epoch"] == epoch
     ]
 
     # Collect metrics per fold
     fold_metrics = {}
-    for stat in epoch_stats:
-        coin = stat["coin"]
+    for epoch_stat in epoch_stats:
+        coin = epoch_stat["coin"]
         prefix = f"fold_{coin}"
-        # Exclude metadata fields
+        # Prefix metrics with fold name
         metrics = {
             f"{prefix}/{k}": v
-            for k, v in stat.items()
+            for k, v in epoch_stat.items()
+            # Exclude metadata fields
             if k not in ["epoch", "fold", "coin"]
         }
         fold_metrics.update(metrics)
@@ -420,11 +381,10 @@ def _aggregate_metrics(
         mean_metrics[f"mean_{key}"] = np.mean(values)
 
     # Scam/non-scam means
-    scam_stats = [
-        stat for stat in epoch_stats if bool(coin_info.get(stat["coin"]))
-    ]
+    fraud_list = {c["symbol"]: c["fraud"] for c in coin_info.values()}
+    scam_stats = [stat for stat in epoch_stats if fraud_list[stat["coin"]]]
     non_scam_stats = [
-        stat for stat in epoch_stats if not bool(coin_info.get(stat["coin"]))
+        stat for stat in epoch_stats if not fraud_list[stat["coin"]]
     ]
 
     for key in metric_keys:
@@ -438,6 +398,20 @@ def _aggregate_metrics(
             )
 
     return {**fold_metrics, **mean_metrics}
+
+
+def _extract_single_coin_info(coin_info: list[dict], coin: str) -> dict:
+    coin_info_ = [c for c in coin_info if c["symbol"] == coin]
+
+    if len(coin_info_) == 0:
+        _LOGGER.error(f"Coin {coin} not found in coin_info.")
+    elif len(coin_info_) > 1:
+        _LOGGER.error(f"Multiple entries found for coin {coin}.")
+
+    return coin_info[0]
+
+
+type CVStats = dict[FoldStats]
 
 
 def train_model(
@@ -455,6 +429,7 @@ def train_model(
         dataset_config: config for dataset creation.
 
     """
+    # Initialize W&B run
     run = wandb.init(project=wandb_project, config=wandb_config)
     wandb_config = wandb.config
 
@@ -464,6 +439,7 @@ def train_model(
     train_coins = train_df["coin"].unique()
     _LOGGER.info(f"Starting LOOCV for {len(train_coins)} coins.")
 
+    # Device selection
     if torch.backends.mps.is_available():
         device = torch.device("mps")
     elif torch.cuda.is_available():
@@ -471,22 +447,25 @@ def train_model(
     else:
         device = torch.device("cpu")
 
-    train_metric_functions = get_metric_objects(
-        device,
-        "train",
-        metric_config["threshold"],
-    )
-    val_metric_functions = get_metric_objects(
-        device,
-        "val",
-        metric_config["threshold"],
-    )
+    # Metric functions
+    train_metric_functions = {
+        "accuracy": classification.BinaryAccuracy(
+            threshold=metric_config["threshold"],
+        ).to(device),
+        "mean_prediction": MeanPrediction().to(device),
+    }
+    val_metric_functions = {
+        "accuracy": classification.BinaryAccuracy(
+            threshold=metric_config["threshold"],
+        ).to(device),
+        "mean_prediction": MeanPrediction().to(device),
+    }
 
-    all_fold_stats = []
-    coin_info = {c["symbol"]: c for c in crypto_data.coin_info}
+    # LOOCV
+    all_fold_stats: CVStats = {}
     for i, coin in enumerate(train_coins):
+        # Data Loader
         train_df, val_df = crypto_data.train_val_split(coin)
-
         if overfit_test:
             dataset_config["n_time_steps"] = 5
         train_dataset = data_pipeline.CryptoDataSet(
@@ -500,31 +479,30 @@ def train_model(
             **dataset_config,
         )
 
+        # Train Fold
+        coin_info = _extract_single_coin_info(crypto_data.coin_info, coin)
         fold_info = {
             "fold_number": i + 1,
             "coin": coin,
-            "is_scam": bool(coin_info.get(coin)),
+            "is_scam": coin_info["fraud"],
         }
-
-        fold_stats = _train_fold(
+        all_fold_stats[coin] = _train_fold(
             train_dataset=train_dataset,
             val_dataset=val_dataset,
             wandb_config=wandb_config,
-            logger_=_LOGGER,
             device=device,
             train_metric_functions=train_metric_functions,
             val_metric_functions=val_metric_functions,
             fold_info=fold_info,
         )
-        all_fold_stats.append(fold_stats)
 
-        best_val_accurcay = max(stat["val_accuracy"] for stat in fold_stats)
-        _LOGGER.info(
-            f"Fold {i+1}/{len(train_coins)} coin={coin} done. Val acc={best_val_accurcay:.3f}",
-        )
-
+    # Aggregate metrics and log to W&B
     for epoch in range(wandb_config.epochs):
-        metrics = _aggregate_metrics(all_fold_stats, epoch, coin_info)
+        metrics = _aggregate_metrics(
+            all_fold_stats,
+            epoch,
+            crypto_data.coin_info,
+        )
         wandb.log(metrics, step=epoch)
 
     wandb.finish()
