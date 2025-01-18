@@ -15,19 +15,37 @@ Main repository for the project.
 ```
 ├── .github/workflows         <- Github actions workflows.
 ├── data       
-│   ├── processed             <- The final, canonical data sets for modeling.
+│   ├── processed             <- The final, canonical data sets for modeling (parquet).
 │   └── raw                   <- The original, immutable data dump.
 │       
-├── docs                      <- Documentation for the project.
-├── models                    <- Model checkpoints, predictions, metrics, and summaries.
+├── docs                      <- Documentation for the project. Papers, Docs and Lernplan for Challenge X (FHNW).
+├── logs                      <- Logs for the project.
 ├── notebooks                 <- Jupyter or Quarto Markdown Notebooks.
-│                                Naming convention is a number (for ordering) and a short `-`
-│                                delimited description, e.g. `00-example.qmd`.
-│        
-├── reports                   <- Generated analysis as HTML, PDF, LaTeX, diagrams, etc.
-├── scripts                   <- Scripts for data processing, model training, etc.
-├── src/CryptoFraudDetection  <- Source code package for use in this project.
-├── tests                     <- Unit tests for the project.
+│   │                            Naming convention is a number (for ordering) and a short `-`
+│   │                            delimited description, e.g. `00-example.qmd`.
+│   │                            
+│   │                            OVERVIEW NOTEBOOKS:
+│   │                            - 01 to 08:    Scraping and Data Collection
+│   │                            - 09 to 14:    EDA and Data Preprocessing
+│   │                            - 15:          run Pipeline
+│   │                            - 18:          Multirocket main Model
+│   │                            - 20:          run Embeddings
+│   │                            
+│   │                            not relevant for Challenge-X (FHNW):
+│   │                            - 50 to 53:    Models of Gabriel Torres Gamez for cgml/5Da
+│   │                            - 90:          old scraping approach for WDB
+│   │
+│   └── html_notebooks        <- relevant HTML versions of the notebooks. 
+│    
+├── scripts                   <- Scripts for the project.
+├── src
+│   ├── ConvTran              <- Source code package of external repository of pre-trained model. (subrepo) 
+│   ├── CryptoFraudDetection  <- Source code package for use in this project.
+│   └── CryptoFraudDetection  <- Package metadata.
+│       .egg-info
+│
+├── tests                     <- Unit tests for the project. Includes scrapers, sentiment, embeddings, etc.
+├── .env-template             <- Template for environment variables.
 ├── .gitignore                <- Files to be ignored by git.
 ├── compose.yml               <- Docker compose file for running the image.
 ├── Dockerfile                <- Dockerfile for the Docker image.
