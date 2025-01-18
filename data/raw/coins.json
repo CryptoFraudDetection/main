@@ -5,7 +5,7 @@
         "fraud": false,
         "test": false,
         "max_market_cap_e9": 1800.0,
-        "start_date": "2010-07-14",
+        "start_date": "2014-11-01",
         "subreddits": [
             "CryptoCurrency",
             "CryptoMoonShots",
@@ -199,7 +199,7 @@
             "Superstonk",
             "CryptoCurrencyClassic"
         ],
-        "end_date": "2024-03-05"
+        "end_date": "2024-06-15"
     },
     {
         "name": "Safe Moon",
