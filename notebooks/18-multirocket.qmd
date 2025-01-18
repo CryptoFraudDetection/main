@@ -1,0 +1,714 @@
+---
+jupyter: python3
+---
+
+```{python}
+from pathlib import Path
+import os
+from tqdm.notebook import tqdm
+import numpy as np
+import pandas as pd
+import torch
+import torchmetrics
+import tqdm
+import pickle
+from torch import nn, optim
+from torch.nn.utils import rnn
+from torch.utils.data import DataLoader
+from torchmetrics import classification
+import joblib
+
+import matplotlib.patches as mpatches
+
+import wandb
+from CryptoFraudDetection.utils import data_pipeline, enums, logger
+
+from sktime.transformations.panel.rocket import MultiRocketMultivariate
+from sklearn.linear_model import RidgeClassifierCV
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import RidgeClassifierCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+from sklearn.pipeline import make_pipeline
+```
+
+```{python}
+
+torch.manual_seed(42)
+np.random.seed(42)
+
+_LOGGER = logger.Logger(
+    name=__name__,
+    level=enums.LoggerMode.INFO,
+    log_dir="../logs",
+)
+```
+
+```{python}
+notebook_dir = Path(os.getcwd())
+data_path = notebook_dir.parent / "data" 
+
+if not data_path.exists():
+    raise FileNotFoundError(f"Data directory not found: {data_path}")
+print(f"Data directory found: {data_path}")
+```
+
+```{python}
+crypto_data = data_pipeline.CryptoData(_LOGGER, data_dir=data_path)
+train_df, test_df = crypto_data.load_data()
+train_coins = train_df["coin"].unique()
+test_coins = test_df["coin"].unique()
+labels_train = train_df["fraud"]
+labels_test = test_df["fraud"]
+
+dataset_config = {
+    "n_cutoff_points": 1,
+    "n_groups_cutoff_points": 1,
+    }
+```
+
+```{python}
+train_coins
+```
+
+```{python}
+test_coins
+```
+
+```{python}
+train_dataset = data_pipeline.CryptoDataSet(
+    df=train_df,
+    logger_=_LOGGER,
+    **dataset_config,
+)
+```
+
+```{python}
+test_dataset = data_pipeline.CryptoDataSet(
+    df=test_df,
+    logger_=_LOGGER,
+    **dataset_config,
+)
+```
+
+```{python}
+num_samples = len(train_dataset)
+print(f"Number of samples in the dataset: {num_samples}")
+
+sample_index = 0
+x, y = train_dataset[sample_index]
+
+print(f"Shape of features (x): {x.shape}")
+print(f"Value of target (y): {y}")
+```
+
+```{python}
+num_samples = len(test_dataset)
+print(f"Number of samples in the dataset: {num_samples}")
+
+sample_index = 0
+x, y = test_dataset[sample_index]
+
+print(f"Shape of features (x): {x.shape}")
+print(f"Value of target (y): {y}")
+```
+
+```{python}
+def prepare_data_for_multirocket(dataset):
+
+    X = []
+    y = []
+
+    for i in range(len(dataset)):
+        x, label = dataset[i]
+
+        x_transformed = pd.DataFrame(x.numpy()).T
+        X.append(x_transformed)
+        y.append(label.item())
+
+    X = pd.concat(X, axis=0, ignore_index=True)
+    y = pd.Series(y)
+
+    return X, y
+
+X_no_cuts, y_no_cuts = prepare_data_for_multirocket(train_dataset)
+
+print(f"Shape of X: {X_no_cuts.shape}")
+print(f"Shape of y: {y_no_cuts.shape}")
+print(f"First 5 y values: {y_no_cuts.head()}")
+```
+
+```{python}
+y_no_cuts
+```
+
+```{python}
+X_no_cuts
+```
+
+```{python}
+def generate_random_time_windows(max_days, n_windows, random_state=None):
+    """
+    Generiert zufällige Zeitfenster mit definiertem Anfang (1) und Ende (max_days),
+    wobei näher an 1 mehr Zeitfenster generiert werden und weiter entfernt weniger.
+    
+    Args:
+        max_days (int): Maximale Anzahl der Tage (z. B. 730 für 2 Jahre).
+        n_windows (int): Anzahl der zu generierenden Zeitfenster.
+        random_state (int, optional): Seed für Reproduzierbarkeit.
+    
+    Returns:
+        list: Zufällig generierte Zeitfenster in Tagen.
+    """
+    rng = np.random.default_rng(random_state)
+    
+    possible_days = np.arange(2, max_days + 1)
+    weights = np.linspace(1, 0, len(possible_days))
+    
+    weights /= weights.sum()
+    
+    random_days = rng.choice(
+        possible_days,
+        size=n_windows - 2,
+        replace=False,
+        p=weights
+    )
+    
+    time_windows = [1] + sorted(random_days) + [max_days]
+    
+    return time_windows
+
+
+def prepare_multivariate_time_series(data, n_coins, n_features, time_windows, max_length, labels, start_days=None):
+    """
+    Bereitet multivariate Zeitfensterdaten mit konsistentem Links-Padding vor.
+
+    Args:
+        data (pd.DataFrame): Originaldaten mit 9333 Zeilen (9 Coins x 1037 Features).
+        n_coins (int): Anzahl der Coins (z. B. 9).
+        n_features (int): Anzahl der Zeitreihen pro Coin (z. B. 1037).
+        time_windows (list): Liste der Zeitfenster in Werten (z. B. [180, 360, 900, 2160]).
+        max_length (int): Maximale Länge der gepaddeten Zeitreihe.
+        labels (np.ndarray): Array mit Labels (0 oder 1) für jeden Coin.
+        start_days (list, optional): Liste der möglichen Startpunkte in Tagen.
+
+    Returns:
+        np.ndarray: MultiRocket-kompatible Daten im Format (n_samples, n_features, n_timepoints).
+        np.ndarray: Labels für die Klassifikation (z. B. Betrug ja/nein).
+    """
+    all_samples = []
+    final_labels = []
+
+    if start_days is None:
+        start_days = [0]
+
+    for coin_idx in range(n_coins):
+        start_idx = coin_idx * n_features
+        end_idx = (coin_idx + 1) * n_features
+        coin_data = data.iloc[start_idx:end_idx]
+
+        for start_day in start_days:
+            for time_window in time_windows:
+                time_series = []
+
+                for _, row in coin_data.iterrows():
+                    valid_values = row.dropna().values
+
+                    if len(valid_values) > start_day:
+                        valid_values = valid_values[start_day:]
+                    else:
+                        valid_values = []
+
+                    if len(valid_values) >= time_window:
+                        window_values = valid_values[:time_window]
+                    else:
+                        window_values = np.pad(
+                            valid_values,
+                            (time_window - len(valid_values), 0),
+                            constant_values=np.nan
+                        )
+
+                    padded_values = np.pad(
+                        window_values,
+                        (max_length - len(window_values), 0),
+                        constant_values=np.nan
+                    )
+                    time_series.append(padded_values)
+
+                all_samples.append(np.array(time_series))
+                final_labels.append(labels[coin_idx])
+
+    all_samples = np.array(all_samples)
+    assert all_samples.shape[1:] == (n_features, max_length), "Uneinheitliche Shapes der Zeitreihen!"
+    return all_samples, np.array(final_labels)
+
+n_coins = 9
+n_features = 1037
+
+time_windows_days = generate_random_time_windows(max_days=365, n_windows=20, random_state=42)
+time_windows = [window * 6 for window in time_windows_days]
+start_days = [0, 5, 10]
+max_length = max(time_windows)
+
+# Transformiere die Daten
+X, y = prepare_multivariate_time_series(X_no_cuts, n_coins, n_features, time_windows, max_length, y_no_cuts, start_days)
+print(f"Shape of X: {X.shape}")
+print(f"Shape of y: {y.shape}")
+print(f"Labels: {y}")
+```
+
+```{python}
+#y to 0 or 1 
+y = y.astype(int)
+y
+```
+
+```{python}
+#fillna in x with 0
+X = X.astype(np.float64)
+
+X = np.nan_to_num(X)
+
+print(f"X dtype: {X.dtype}, X shape: {X.shape}")
+```
+
+```{python}
+y = y.astype(np.int64)  # oder np.float64
+print(f"y dtype: {y.dtype}, y shape: {y.shape}")
+```
+
+```{python}
+multirocket = MultiRocketMultivariate(n_jobs=-1)
+count_windows = len(time_windows_days)*len(start_days)
+
+X_test = X[:((2*count_windows)-len(X))]
+y_test = y[:((2*count_windows)-len(X))]
+
+X_train = X[((2*count_windows)-len(X)):]
+y_train = y[((2*count_windows)-len(X)):]
+
+
+scaler = StandardScaler()
+
+n_samples, n_features, n_timepoints = X.shape
+X_reshaped = X.reshape(n_samples, -1)
+
+X_train_scaled = scaler.fit_transform(X_reshaped[len(X_test):])
+X_test_scaled = scaler.transform(X_reshaped[:len(X_test)])
+
+X_train_scaled = X_train_scaled.reshape(len(X_train), n_features, n_timepoints)
+X_test_scaled = X_test_scaled.reshape(len(X_test), n_features, n_timepoints)
+
+multirocket.fit(X_train_scaled, y_train)
+
+X_transformed_train = multirocket.transform(X_train_scaled)
+X_transformed_test = multirocket.transform(X_test_scaled)
+print(f"Shape of transformed X_train: {X_transformed_train.shape}")
+print(f"Shape of transformed X_test: {X_transformed_test.shape}")
+```
+
+```{python}
+X_transformed_train
+```
+
+```{python}
+y_train
+```
+
+```{python}
+
+rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+
+
+rf.fit(X_transformed_train, y_train)
+
+train_predictions = rf.predict(X_transformed_train)
+
+print("Classification Report:")
+print(classification_report(y_train, train_predictions))
+
+results_df = pd.DataFrame({
+    "True_Label": y_train,
+    "Prediction": train_predictions,
+    "Coin": [f"Coin_{i // 4 + 1}" for i in range(len(y_train))]
+})
+
+plt.figure(figsize=(12, 6))
+sns.scatterplot(
+    x=range(len(y_train)),
+    y=results_df["True_Label"],
+    label="True Labels",
+    marker="o",
+    color="blue"
+)
+sns.scatterplot(
+    x=range(len(train_predictions)),
+    y=results_df["Prediction"],
+    label="Predictions",
+    marker="x",
+    color="red"
+)
+
+plt.title("True Labels vs. Predictions")
+plt.xlabel("Data Index")
+plt.ylabel("Labels")
+plt.legend()
+plt.show()
+```
+
+```{python}
+predictions_test = rf.predict(X_transformed_test)
+
+print("Classification Report:")
+print(classification_report(y_test, predictions_test))
+
+results_df = pd.DataFrame({
+    "True_Label": y_test,
+    "Prediction": predictions_test,
+    "Coin": [f"Coin_{i // 4 + 1}" for i in range(len(y_test))]
+})
+
+plt.figure(figsize=(12, 6))
+sns.scatterplot(
+    x=range(len(y_test)),
+    y=results_df["True_Label"],
+    label="True Labels",
+    marker="o",
+    color="blue"
+)
+sns.scatterplot(
+    x=range(len(predictions_test)),
+    y=results_df["Prediction"],
+    label="Predictions",
+    marker="x",
+    color="red"
+)
+
+plt.title("True Labels vs. Predictions")
+plt.xlabel("Data Index")
+plt.ylabel("Labels")
+plt.legend()
+plt.show()
+```
+
+```{python}
+X_no_cuts_test, y_no_cuts_test = prepare_data_for_multirocket(test_dataset)
+```
+
+```{python}
+
+n_coins = 4
+n_features = 1037
+```
+
+```{python}
+X.shape
+```
+
+```{python}
+
+```
+
+```{python}
+multirocket_all_data = MultiRocketMultivariate(n_jobs=-1)
+count_windows = len(time_windows_days)*len(start_days)
+
+X_train = X
+y_train = y
+
+scaler = StandardScaler()
+
+n_samples, n_features, n_timepoints = X_train.shape
+X_reshaped = X_train.reshape(n_samples, -1)
+
+X_train_scaled = scaler.fit_transform(X_reshaped)
+
+X_train_scaled = X_train_scaled.reshape(len(X_train), n_features, n_timepoints)
+
+
+multirocket_all_data.fit(X_train_scaled, y_train)
+
+X_transformed_train = multirocket_all_data.transform(X_train_scaled)
+
+print(f"Shape of transformed X_train: {X_transformed_train.shape}")
+```
+
+```{python}
+
+joblib.dump(multirocket_all_data, "multirocket_model.pkl")
+print("MultiRocket-Modell wurde erfolgreich gespeichert.")
+```
+
+```{python}
+
+multirocket_all_data = joblib.load("multirocket_model.pkl")
+print("MultiRocket-Modell wurde erfolgreich geladen.")
+```
+
+```{python}
+
+
+rf_all_data = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+
+
+rf_all_data.fit(X_transformed_train, y_train)
+
+train_predictions = rf_all_data.predict(X_transformed_train)
+
+print("Classification Report:")
+print(classification_report(y_train, train_predictions))
+
+results_df = pd.DataFrame({
+    "True_Label": y_train,
+    "Prediction": train_predictions,
+    "Coin": [f"Coin_{i // 4 + 1}" for i in range(len(y_train))]
+})
+
+plt.figure(figsize=(12, 6))
+sns.scatterplot(
+    x=range(len(y_train)),
+    y=results_df["True_Label"],
+    label="True Labels",
+    marker="o",
+    color="blue"
+)
+sns.scatterplot(
+    x=range(len(train_predictions)),
+    y=results_df["Prediction"],
+    label="Predictions",
+    marker="x",
+    color="red"
+)
+
+plt.title("True Labels vs. Predictions")
+plt.xlabel("Data Index")
+plt.ylabel("Labels")
+plt.legend()
+plt.show()
+```
+
+```{python}
+y_no_cuts_test
+```
+
+```{python}
+n_coins = 4
+n_features = 1037
+
+time_windows_days = generate_random_time_windows(max_days=365, n_windows=10, random_state=42)
+time_windows = [window * 6 for window in time_windows_days]
+start_days = [0,1,2,3,4]
+max_length = max(time_windows)
+
+# Transformiere die Daten
+X_test, y_test = prepare_multivariate_time_series(X_no_cuts_test, n_coins, n_features, time_windows, max_length, y_no_cuts_test, start_days)
+print(f"Shape of X: {X_test.shape}")
+print(f"Shape of y: {y_test.shape}")
+print(f"Labels: {y_test}")
+```
+
+```{python}
+#fillna in x with 0
+X_test = X_test.astype(np.float64)
+
+X_test = np.nan_to_num(X_test)
+
+print(f"X dtype: {X_test.dtype}, X shape: {X_test.shape}")
+```
+
+```{python}
+y_test = y_test.astype(np.int64)  # oder np.float64
+print(f"y dtype: {y_test.dtype}, y shape: {y_test.shape}")
+```
+
+```{python}
+
+n_samples, n_features, n_timepoints = X_test.shape
+
+X_test_reshaped = X_test.reshape(n_samples, -1)
+
+X_test_scaled = scaler.transform(X_test_reshaped)
+
+X_test_scaled = X_test_scaled.reshape(len(X_test_scaled), n_features, n_timepoints)
+
+X_transformed_test = multirocket_all_data.transform(X_test_scaled)
+
+print(f"Shape of transformed X_train: {X_transformed_test.shape}")
+```
+
+```{python}
+
+test_predictions = rf_all_data.predict(X_transformed_test)
+
+#Abspeichern der Predictions um nicht immer die Modelle neu trainieren/transformeiren lassen zu müssen
+output_dir = "../data/raw/output_files"
+predictions_file = os.path.join(output_dir, "test_predictions.csv")
+
+if not os.path.exists(predictions_file):
+    os.makedirs(output_dir, exist_ok=True)
+
+    predictions_df = pd.DataFrame({
+        "Index": range(len(test_predictions)),
+        "Prediction": test_predictions
+    })
+
+    predictions_df.to_csv(predictions_file, index=False)
+    print(f"Predictions gespeichert unter: {predictions_file}")
+else:
+    print(f"Predictions-Datei existiert bereits: {predictions_file}")
+
+```
+
+```{python}
+
+loaded_predictions_df = pd.read_csv(predictions_file)
+
+test_predictions = loaded_predictions_df["Prediction"].values
+
+print("Classification Report:")
+print(classification_report(y_test, test_predictions))
+```
+
+```{python}
+#Vorbereiten des DF für Plots mit hinzufügen von Coin und time_window als Columns
+
+start_days = [0, 1, 2, 3, 4]
+#windows kopiert um nicht immer neu laufen zu lassen
+time_windows = [20, 33, 41, 47, 101, 134, 157, 209, 278, 365]
+
+results_df = pd.DataFrame({
+    "True_Label": y_test,
+    "Prediction": test_predictions
+})
+
+results_df["Coin"] = (
+    ["ETH"] * 50 +
+    ["ATOM"] * 50 +
+    ["FTX"] * 50 +
+    ["SafeMoon"] * (len(results_df) - 150)
+)
+
+def generate_time_window_strings(start_days, time_windows):
+    return [
+        f"{start}_start_{length}_len"
+        for start in start_days
+        for length in time_windows
+    ]
+
+time_window_strings = generate_time_window_strings(start_days, time_windows)
+
+results_df["time_window"] = (
+    time_window_strings * (len(results_df) // len(time_window_strings)) +
+    time_window_strings[:len(results_df) % len(time_window_strings)]
+)
+```
+
+```{python}
+
+plt.figure(figsize=(12, 6))
+sns.scatterplot(
+    x=range(len(y_test)),
+    y=results_df["True_Label"],
+    label="True Labels",
+    marker="o",
+    color="blue"
+)
+sns.scatterplot(
+    x=range(len(test_predictions)),
+    y=results_df["Prediction"],
+    label="Predictions",
+    marker="x",
+    color="red"
+)
+
+x_positions = [49, 99, 149, 199]
+labels = ["until here ETH", "until here ATOM", "until here FTX", "until here SafeMoon"]
+
+for x_pos, label in zip(x_positions, labels):
+    plt.axvline(x=x_pos, color="black", linestyle="--", linewidth=1)
+    plt.text(
+        x=x_pos + 2,
+        y=max(results_df["True_Label"].max(), results_df["Prediction"].max()) - 0.2,
+        s=label,
+        rotation=90,
+        verticalalignment="center",
+        fontsize=10,
+        color="black"
+    )
+
+
+plt.title("True Labels vs. Predictions")
+plt.xlabel("Data Index")
+plt.ylabel("Labels")
+plt.legend()
+plt.show()
+```
+
+The Modell perfectly predicts non-Scam but it can't predict the scam in FTX. Its somewhat okay at predicting SafeMoon as scam. Maybe because FTX was not an typical Scam coin but the whole organisation behind the coin and especially the exchnage was a scam. While Safemoon was an typical scam coin which used bots on social media (from which 99% of the data was collected) to promote the coin.
+
+```{python}
+
+
+cm = confusion_matrix(y_test, test_predictions)
+
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt="d", cmap="coolwarm", xticklabels=["Class 0", "Class 1"], yticklabels=["Class 0", "Class 1"])
+plt.title("Confusion Matrix Heatmap")
+plt.ylabel("True Label")
+plt.xlabel("Predicted Label")
+plt.show()
+```
+
+The Modell often Predicts 0 even if its a Scam. But if it says its a Scam, it was always a Scam.
+
+```{python}
+results_df["time_window"].unique()
+```
+
+```{python}
+results_df
+```
+
+```{python}
+results_df['Correct'] = (results_df['True_Label'] == results_df['Prediction']).astype(int)
+
+def sort_time_window(value):
+    parts = value.split('_')
+    return int(parts[0]), int(parts[2])
+
+sorted_time_windows = sorted(results_df['time_window'].unique(), key=sort_time_window)
+performance_by_coin = results_df.groupby(['time_window', 'Coin'])['Correct'].mean().unstack(fill_value=0)
+
+performance_by_coin = performance_by_coin.loc[sorted_time_windows]
+
+plt.figure(figsize=(12, 10))
+sns.heatmap(
+    performance_by_coin,
+    annot=False,
+    cmap="RdYlGn",
+    linewidths=0.5,
+    linecolor='black',
+    cbar=False
+)
+
+plt.title("Model-Performance over Time Windows (Green=Correct Prediction, Red=Incorrect Prediction)", fontsize=14)
+plt.xlabel("Coin", fontsize=10)
+plt.ylabel("Time Window", fontsize=10)
+plt.xticks(rotation=45, ha='right', fontsize=8)
+plt.yticks(fontsize=8)
+
+
+green_patch = mpatches.Patch(color='green', label='Correct')
+red_patch = mpatches.Patch(color='red', label='Incorrect')
+plt.legend(handles=[green_patch, red_patch], title="Accuracy", loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=10)
+
+plt.tight_layout()
+plt.show()
+```
+
+Here we can see the diffrent Time Windows from the coins and how the Model predictet them. We can see, that in Safemoon it could detect the scam better with shorter Time Windows and with Windows which contain more "newer" days
+
